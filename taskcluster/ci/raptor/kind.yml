@@ -8,6 +8,7 @@ transforms:
 
 kind-dependencies:
     - signing
+    - toolchain
 
 only-for-build-types:
     - performance-test
@@ -17,6 +18,8 @@ only-for-abis:
     - arm64-v8a
 
 job-defaults:
+    attributes:
+        retrigger: true
     dependencies:
         geckoview-nightly: geckoview-nightly
     notify:
@@ -34,7 +37,7 @@ job-defaults:
     run-on-tasks-for: []
     treeherder:
         kind: test
-        tier: 2
+        tier: 1
         platform:
             by-abi:
                 arm64-v8a: android-hw-p2-8-0-android-aarch64/opt
@@ -76,6 +79,9 @@ job-defaults:
             - '--binary=org.mozilla.fenix.performancetest'
             - '--activity=org.mozilla.fenix.browser.BrowserPerformanceTestActivity'
             - '--download-symbols=ondemand'
+    fetches:
+        toolchain:
+            - linux64-minidump-stackwalk
 
 jobs:
     tp6m-1-cold:

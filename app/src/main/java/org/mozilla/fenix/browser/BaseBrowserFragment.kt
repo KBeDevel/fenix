@@ -6,24 +6,19 @@ package org.mozilla.fenix.browser
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.CallSuper
-import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.net.toUri
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.NavDirections
 import androidx.navigation.fragment.findNavController
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.snackbar.Snackbar
-import kotlinx.android.synthetic.main.component_search.*
 import kotlinx.android.synthetic.main.fragment_browser.*
 import kotlinx.android.synthetic.main.fragment_browser.view.*
 import kotlinx.coroutines.Dispatchers.IO
@@ -35,6 +30,7 @@ import kotlinx.coroutines.withContext
 import mozilla.appservices.places.BookmarkRoot
 import mozilla.components.browser.session.Session
 import mozilla.components.browser.session.SessionManager
+import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.feature.accounts.FxaCapability
 import mozilla.components.feature.accounts.FxaWebChannelFeature
 import mozilla.components.feature.app.links.AppLinksFeature
@@ -45,22 +41,25 @@ import mozilla.components.feature.downloads.DownloadsFeature
 import mozilla.components.feature.downloads.manager.FetchDownloadManager
 import mozilla.components.feature.intent.ext.EXTRA_SESSION_ID
 import mozilla.components.feature.prompts.PromptFeature
+import mozilla.components.feature.prompts.share.ShareDelegate
 import mozilla.components.feature.readerview.ReaderViewFeature
 import mozilla.components.feature.session.FullScreenFeature
 import mozilla.components.feature.session.SessionFeature
 import mozilla.components.feature.session.SessionUseCases
 import mozilla.components.feature.session.SwipeRefreshFeature
+import mozilla.components.feature.session.behavior.EngineViewBottomBehavior
 import mozilla.components.feature.sitepermissions.SitePermissions
 import mozilla.components.feature.sitepermissions.SitePermissionsFeature
 import mozilla.components.feature.sitepermissions.SitePermissionsRules
-import mozilla.components.support.base.feature.BackHandler
+import mozilla.components.service.sync.logins.DefaultLoginValidationDelegate
 import mozilla.components.support.base.feature.PermissionsFeature
+import mozilla.components.support.base.feature.UserInteractionHandler
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import mozilla.components.support.ktx.android.view.exitImmersiveModeIfNeeded
-import org.mozilla.fenix.Experiments
 import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.IntentReceiverActivity
+import org.mozilla.fenix.NavGraphDirections
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.readermode.DefaultReaderModeController
 import org.mozilla.fenix.components.FenixSnackbar
@@ -78,15 +77,15 @@ import org.mozilla.fenix.downloads.DownloadNotificationBottomSheetDialog
 import org.mozilla.fenix.downloads.DownloadService
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.enterToImmersiveMode
-import org.mozilla.fenix.ext.getRootView
+import org.mozilla.fenix.ext.hideToolbar
 import org.mozilla.fenix.ext.metrics
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.sessionsOfType
 import org.mozilla.fenix.ext.settings
-import org.mozilla.fenix.isInExperiment
 import org.mozilla.fenix.settings.SupportUtils
 import org.mozilla.fenix.theme.ThemeManager
+import java.lang.ref.WeakReference
 
 /**
  * Base fragment extended by [BrowserFragment].
@@ -94,10 +93,17 @@ import org.mozilla.fenix.theme.ThemeManager
  * UI code specific to the app or to custom tabs can be found in the subclasses.
  */
 @Suppress("TooManyFunctions", "LargeClass")
-abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Observer {
+abstract class BaseBrowserFragment : Fragment(), UserInteractionHandler, SessionManager.Observer {
     protected lateinit var browserFragmentStore: BrowserFragmentStore
-    protected lateinit var browserInteractor: BrowserToolbarViewInteractor
-    protected lateinit var browserToolbarView: BrowserToolbarView
+    private lateinit var browserAnimator: BrowserAnimator
+
+    private var _browserInteractor: BrowserToolbarViewInteractor? = null
+    protected val browserInteractor: BrowserToolbarViewInteractor
+        get() = _browserInteractor!!
+
+    private var _browserToolbarView: BrowserToolbarView? = null
+    protected val browserToolbarView: BrowserToolbarView
+        get() = _browserToolbarView!!
 
     protected val readerViewFeature = ViewBoundFeatureWrapper<ReaderViewFeature>()
 
@@ -117,6 +123,9 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
 
     private var browserInitialized: Boolean = false
     private var initUIJob: Job? = null
+
+    // We need this so we don't accidentally remove all external sessions on back press
+    private var sessionRemoved = false
 
     @CallSuper
     override fun onCreateView(
@@ -152,29 +161,35 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
         val sessionManager = context.components.core.sessionManager
         val store = context.components.core.store
 
+        val toolbarHeight = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height)
+
+        initializeEngineView(toolbarHeight)
+
+        browserAnimator = BrowserAnimator(
+            fragment = WeakReference(this),
+            engineView = WeakReference(engineView),
+            swipeRefresh = WeakReference(swipeRefresh),
+            arguments = arguments!!
+        ).apply {
+            beginAnimateInIfNecessary()
+        }
+
         return getSessionById()?.also { session ->
-
-            // We need to show the snackbar while the browsing data is deleting(if "Delete
-            // browsing data on quit" is activated). After the deletion is over, the snackbar
-            // is dismissed.
-            val snackbar: FenixSnackbar? = requireActivity().getRootView()?.let { v ->
-                FenixSnackbar.make(v, Snackbar.LENGTH_INDEFINITE)
-                    .setText(v.context.getString(R.string.deleting_browsing_data_in_progress))
-            }
-
             val browserToolbarController = DefaultBrowserToolbarController(
                 store = browserFragmentStore,
                 activity = requireActivity(),
-                snackbar = snackbar,
                 navController = findNavController(),
-                readerModeController = DefaultReaderModeController(readerViewFeature),
+                readerModeController = DefaultReaderModeController(
+                    readerViewFeature,
+                    (activity as HomeActivity).browsingModeManager.mode.isPrivate,
+                    view.readerViewControlsBar
+                ),
                 browsingModeManager = (activity as HomeActivity).browsingModeManager,
                 sessionManager = requireComponents.core.sessionManager,
                 findInPageLauncher = { findInPageIntegration.withFeature { it.launch() } },
-                browserLayout = view.browserLayout,
                 engineView = engineView,
                 swipeRefresh = swipeRefresh,
-                adjustBackgroundAndNavigate = ::adjustBackgroundAndNavigate,
+                browserAnimator = browserAnimator,
                 customTabSession = customTabSessionId?.let { sessionManager.findSessionById(it) },
                 getSupportUrl = {
                     SupportUtils.getSumoURLForTopic(
@@ -184,21 +199,23 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                 },
                 openInFenixIntent = Intent(context, IntentReceiverActivity::class.java).apply {
                     action = Intent.ACTION_VIEW
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 },
                 bookmarkTapped = { lifecycleScope.launch { bookmarkTapped(it) } },
                 scope = lifecycleScope,
-                tabCollectionStorage = requireComponents.core.tabCollectionStorage
+                tabCollectionStorage = requireComponents.core.tabCollectionStorage,
+                topSiteStorage = requireComponents.core.topSiteStorage
             )
 
-            browserInteractor = BrowserInteractor(
+            _browserInteractor = BrowserInteractor(
                 browserToolbarController = browserToolbarController
             )
 
-            browserToolbarView = BrowserToolbarView(
+            _browserToolbarView = BrowserToolbarView(
                 container = view.browserLayout,
+                shouldUseBottomToolbar = context.settings().shouldUseBottomToolbar,
                 interactor = browserInteractor,
-                customTabSession = customTabSessionId?.let { sessionManager.findSessionById(it) }
+                customTabSession = customTabSessionId?.let { sessionManager.findSessionById(it) },
+                lifecycleOwner = this.viewLifecycleOwner
             )
 
             toolbarIntegration.set(
@@ -213,7 +230,7 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                     sessionId = customTabSessionId,
                     stub = view.stubFindInPage,
                     engineView = view.engineView,
-                    toolbar = toolbar
+                    toolbar = browserToolbarView.view
                 ),
                 owner = this,
                 view = view
@@ -235,7 +252,7 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                     candidates = getContextMenuCandidates(context, view),
                     engineView = view.engineView,
                     useCases = context.components.useCases.contextMenuUseCases,
-                    customTabId = customTabSessionId
+                    tabId = customTabSessionId
                 ),
                 owner = this,
                 view = view
@@ -246,7 +263,7 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                 store = store,
                 useCases = context.components.useCases.downloadUseCases,
                 fragmentManager = childFragmentManager,
-                customTabId = customTabSessionId,
+                tabId = customTabSessionId,
                 downloadManager = FetchDownloadManager(
                     context.applicationContext,
                     DownloadService::class
@@ -254,8 +271,14 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                 promptsStyling = DownloadsFeature.PromptsStyling(
                     gravity = Gravity.BOTTOM,
                     shouldWidthMatchParent = true,
-                    positiveButtonBackgroundColor = ThemeManager.resolveAttribute(R.attr.accent, context),
-                    positiveButtonTextColor = ThemeManager.resolveAttribute(R.attr.contrastText, context),
+                    positiveButtonBackgroundColor = ThemeManager.resolveAttribute(
+                        R.attr.accent,
+                        context
+                    ),
+                    positiveButtonTextColor = ThemeManager.resolveAttribute(
+                        R.attr.contrastText,
+                        context
+                    ),
                     positiveButtonRadius = (resources.getDimensionPixelSize(R.dimen.tab_corner_radius)).toFloat()
                 ),
                 onNeedToRequestPermissions = { permissions ->
@@ -266,19 +289,18 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
             downloadFeature.onDownloadStopped = { download, _, downloadJobStatus ->
                 // If the download is just paused, don't show any in-app notification
                 if (downloadJobStatus == AbstractFetchDownloadService.DownloadJobStatus.COMPLETED ||
-                    downloadJobStatus == AbstractFetchDownloadService.DownloadJobStatus.FAILED) {
+                    downloadJobStatus == AbstractFetchDownloadService.DownloadJobStatus.FAILED
+                ) {
                     val dialog = DownloadNotificationBottomSheetDialog(
                         context = context,
                         didFail = downloadJobStatus == AbstractFetchDownloadService.DownloadJobStatus.FAILED,
                         download = download,
                         tryAgain = downloadFeature::tryAgain,
                         onCannotOpenFile = {
-                            FenixSnackbar.make(view, Snackbar.LENGTH_SHORT)
+                            FenixSnackbar.makeWithToolbarPadding(view, Snackbar.LENGTH_SHORT)
                                 .setText(context.getString(R.string.mozac_feature_downloads_could_not_open_file))
-                                .setAnchorView(browserToolbarView.view)
                                 .show()
                         }
-
                     )
                     dialog.show()
                 }
@@ -295,8 +317,8 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                     context,
                     sessionManager = sessionManager,
                     sessionId = customTabSessionId,
-                    interceptLinkClicks = true,
-                    fragmentManager = parentFragmentManager
+                    fragmentManager = parentFragmentManager,
+                    launchInApp = { context.settings().openLinksInExternalApp }
                 ),
                 owner = this,
                 view = view
@@ -308,6 +330,27 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                     store = store,
                     customTabId = customTabSessionId,
                     fragmentManager = parentFragmentManager,
+                    loginValidationDelegate = DefaultLoginValidationDelegate(
+                        context.components.core.lazyPasswordsStorage
+                    ),
+                    isSaveLoginEnabled = {
+                        context.settings().shouldPromptToSaveLogins
+                    },
+                    shareDelegate = object : ShareDelegate {
+                        override fun showShareSheet(
+                            context: Context,
+                            shareData: ShareData,
+                            onDismiss: () -> Unit,
+                            onSuccess: () -> Unit
+                        ) {
+                            val directions = NavGraphDirections.actionGlobalShareFragment(
+                                data = arrayOf(shareData),
+                                showPage = true,
+                                sessionId = getSessionById()?.id
+                            )
+                            findNavController().navigate(directions)
+                        }
+                    },
                     onNeedToRequestPermissions = { permissions ->
                         requestPermissions(permissions, REQUEST_CODE_PROMPT_PERMISSIONS)
                     }),
@@ -358,23 +401,49 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                         FenixSnackbar.make(view.rootView, Snackbar.LENGTH_SHORT)
                             .setText(getString(R.string.full_screen_notification))
                             .show()
-                        activity?.requestedOrientation =
-                            ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
                         activity?.enterToImmersiveMode()
-                        toolbar.visibility = View.GONE
+                        browserToolbarView.view.visibility = View.GONE
+
+                        if (FeatureFlags.dynamicBottomToolbar) {
+                            engineView.setDynamicToolbarMaxHeight(0)
+                            // TODO We need to call force expand here to update verticalClipping #8697
+                            // Without this, fullscreen has a margin at the top.
+                            engineView.setVerticalClipping(0)
+                        }
                     } else {
-                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_USER
                         activity?.exitImmersiveModeIfNeeded()
                         (activity as? HomeActivity)?.let { activity ->
                             activity.themeManager.applyStatusBarTheme(activity)
                         }
-                        toolbar.visibility = View.VISIBLE
+                        browserToolbarView.view.visibility = View.VISIBLE
+                        if (FeatureFlags.dynamicBottomToolbar) {
+                            engineView.setDynamicToolbarMaxHeight(toolbarHeight)
+                        }
                     }
-                    updateLayoutMargins(inFullScreen)
+                    if (!FeatureFlags.dynamicBottomToolbar) {
+                        updateLayoutMargins(inFullScreen)
+                    }
                 },
                 owner = this,
                 view = view
             )
+
+            session.register(observer = object : Session.Observer {
+                override fun onLoadRequest(
+                    session: Session,
+                    url: String,
+                    triggeredByRedirect: Boolean,
+                    triggeredByWebContent: Boolean
+                ) {
+                    browserToolbarView.expand()
+                }
+            }, owner = viewLifecycleOwner)
+
+            sessionManager.register(observer = object : SessionManager.Observer {
+                override fun onSessionSelected(session: Session) {
+                    browserToolbarView.expand()
+                }
+            }, owner = viewLifecycleOwner)
 
             @Suppress("ConstantConditionIf")
             if (FeatureFlags.pullToRefreshEnabled) {
@@ -396,7 +465,8 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                 view.swipeRefresh.setOnChildScrollUpCallback { _, _ -> true }
             }
 
-            if (!requireContext().isInExperiment(Experiments.asFeatureWebChannelsDisabled)) {
+            @Suppress("ConstantConditionIf")
+            if (!FeatureFlags.asFeatureWebChannelsDisabled) {
                 webchannelIntegration.set(
                     feature = FxaWebChannelFeature(
                         requireContext(),
@@ -404,14 +474,31 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                         requireComponents.core.engine,
                         requireComponents.core.sessionManager,
                         requireComponents.backgroundServices.accountManager,
+                        requireComponents.backgroundServices.serverConfig,
                         setOf(FxaCapability.CHOOSE_WHAT_TO_SYNC)
                     ),
                     owner = this,
                     view = view
                 )
             }
+        }
+    }
 
-            (activity as HomeActivity).updateThemeForSession(session)
+    private fun initializeEngineView(toolbarHeight: Int) {
+        if (FeatureFlags.dynamicBottomToolbar) {
+            engineView.setDynamicToolbarMaxHeight(toolbarHeight)
+
+            val behavior = if (requireContext().settings().shouldUseBottomToolbar) {
+                EngineViewBottomBehavior(context, null)
+            } else {
+                AppBarLayout.ScrollingViewBehavior(context, null)
+            }
+
+            (swipeRefresh.layoutParams as CoordinatorLayout.LayoutParams).behavior = behavior
+        } else {
+            if (!requireContext().settings().shouldUseBottomToolbar) {
+                engineView.setDynamicToolbarMaxHeight(toolbarHeight)
+            }
         }
     }
 
@@ -422,14 +509,6 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
         context: Context,
         view: View
     ): List<ContextMenuCandidate>
-
-    private fun adjustBackgroundAndNavigate(directions: NavDirections) {
-        context?.let {
-            swipeRefresh?.background = ColorDrawable(Color.TRANSPARENT)
-            engineView?.asView()?.visibility = View.GONE
-            findNavController().nav(R.id.browserFragment, directions)
-        }
-    }
 
     @CallSuper
     override fun onSessionSelected(session: Session) {
@@ -461,7 +540,7 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
             components.core.engine.settings.preferredColorScheme = preferredColorScheme
             components.useCases.sessionUseCases.reload()
         }
-        (activity as AppCompatActivity).supportActionBar?.hide()
+        hideToolbar()
 
         assignSitePermissionsRules()
     }
@@ -480,7 +559,8 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
 
     @CallSuper
     override fun onBackPressed(): Boolean {
-        return findInPageIntegration.onBackPressed() ||
+        return sessionRemoved ||
+                findInPageIntegration.onBackPressed() ||
                 fullScreenFeature.onBackPressed() ||
                 sessionFeature.onBackPressed() ||
                 removeSessionIfNeeded()
@@ -532,17 +612,21 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
 
     /**
      * Removes the session if it was opened by an ACTION_VIEW intent
-     * or if it has no more history
+     * or if it has a parent session and no more history
      */
     protected open fun removeSessionIfNeeded(): Boolean {
         getSessionById()?.let { session ->
             val sessionManager = requireComponents.core.sessionManager
             if (session.source == Session.Source.ACTION_VIEW) {
                 sessionManager.remove(session)
+                sessionRemoved = true
+                activity?.onBackPressed()
             } else {
                 val isLastSession =
                     sessionManager.sessionsOfType(private = session.private).count() == 1
-                sessionManager.remove(session, session.hasParentSession)
+                if (session.hasParentSession) {
+                    sessionManager.remove(session, true)
+                }
                 val goToOverview = isLastSession || !session.hasParentSession
                 return !goToOverview
             }
@@ -560,12 +644,19 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
     /**
      * Returns the top and bottom margins.
      */
-    protected abstract fun getEngineMargins(): Pair<Int, Int>
+    private fun getEngineMargins(): Pair<Int, Int> =
+        if (context?.settings()?.shouldUseBottomToolbar == true) {
+            val toolbarSize = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height)
+            0 to toolbarSize
+        } else {
+            0 to 0
+        }
 
     /**
-     * Returns the layout [android.view.Gravity] for the quick settings dialog.
+     * Returns the layout [android.view.Gravity] for the quick settings and ETP dialog.
      */
-    protected abstract fun getAppropriateLayoutGravity(): Int
+    protected fun getAppropriateLayoutGravity(): Int =
+        if (context?.settings()?.shouldUseBottomToolbar == true) Gravity.BOTTOM else Gravity.TOP
 
     protected fun updateLayoutMargins(inFullScreen: Boolean) {
         view?.swipeRefresh?.apply {
@@ -657,8 +748,8 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                 requireComponents.analytics.metrics.track(Event.AddBookmark)
 
                 view?.let { view ->
-                    FenixSnackbar.make(view, Snackbar.LENGTH_LONG)
-                        .setAnchorView(browserToolbarView.view)
+                    FenixSnackbar.make(view, FenixSnackbar.LENGTH_LONG)
+                        .setText(getString(R.string.bookmark_saved_snackbar))
                         .setAction(getString(R.string.edit_bookmark_snackbar_action)) {
                             nav(
                                 R.id.browserFragment,
@@ -667,11 +758,19 @@ abstract class BaseBrowserFragment : Fragment(), BackHandler, SessionManager.Obs
                                 )
                             )
                         }
-                        .setText(getString(R.string.bookmark_saved_snackbar))
                         .show()
                 }
             }
         }
+    }
+
+    /*
+     * Dereference these views when the fragment view is destroyed to prevent memory leaks
+     */
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _browserToolbarView = null
+        _browserInteractor = null
     }
 
     companion object {

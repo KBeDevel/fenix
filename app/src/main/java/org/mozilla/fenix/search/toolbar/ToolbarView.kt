@@ -9,17 +9,29 @@ import android.graphics.drawable.BitmapDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.LayoutRes
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.ContextCompat
+import com.google.android.material.appbar.AppBarLayout
+import com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_ENTER_ALWAYS
+import com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_EXIT_UNTIL_COLLAPSED
+import com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL
+import com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SNAP
 import kotlinx.android.extensions.LayoutContainer
 import mozilla.components.browser.domains.autocomplete.ShippedDomainsProvider
 import mozilla.components.browser.toolbar.BrowserToolbar
+import mozilla.components.browser.toolbar.behavior.BrowserToolbarBottomBehavior
+import mozilla.components.concept.engine.Engine
 import mozilla.components.concept.storage.HistoryStorage
 import mozilla.components.feature.toolbar.ToolbarAutocompleteFeature
+import mozilla.components.support.ktx.android.content.getColorFromAttr
 import mozilla.components.support.ktx.android.util.dpToPx
+import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.R
-import org.mozilla.fenix.ext.getColorFromAttr
+import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.search.SearchFragmentState
+import org.mozilla.fenix.theme.ThemeManager
 
 /**
  * Interface for the Toolbar Interactor. This interface is implemented by objects that want
@@ -52,21 +64,33 @@ class ToolbarView(
     private val container: ViewGroup,
     private val interactor: ToolbarInteractor,
     private val historyStorage: HistoryStorage?,
-    private val isPrivate: Boolean
+    private val isPrivate: Boolean,
+    engine: Engine
 ) : LayoutContainer {
 
     override val containerView: View?
         get() = container
 
+    private val settings = container.context.settings()
+
+    @LayoutRes
+    private val toolbarLayout = when {
+        settings.shouldUseBottomToolbar -> R.layout.component_bottom_browser_toolbar
+        else -> R.layout.component_browser_top_toolbar
+    }
+
     val view: BrowserToolbar = LayoutInflater.from(container.context)
-        .inflate(R.layout.component_search, container, true)
+        .inflate(toolbarLayout, container, true)
         .findViewById(R.id.toolbar)
 
     private var isInitialized = false
+    private var hasBeenCanceled = false
 
     init {
         view.apply {
             editMode()
+
+            setScrollFlagsForTopToolbar()
 
             elevation = TOOLBAR_ELEVATION_IN_DP.dpToPx(resources.displayMetrics).toFloat()
 
@@ -75,7 +99,10 @@ class ToolbarView(
                 false
             }
 
-            background = null
+            background =
+                AppCompatResources.getDrawable(
+                    container.context, ThemeManager.resolveAttribute(R.attr.foundation, context)
+                )
 
             layoutParams.height = CoordinatorLayout.LayoutParams.MATCH_PARENT
 
@@ -92,13 +119,16 @@ class ToolbarView(
             )
 
             edit.setUrlBackground(
-                ContextCompat.getDrawable(container.context, R.drawable.search_url_background))
+                AppCompatResources.getDrawable(container.context, R.drawable.search_url_background))
 
             private = isPrivate
 
             setOnEditListener(object : mozilla.components.concept.toolbar.Toolbar.OnEditListener {
                 override fun onCancelEditing(): Boolean {
-                    interactor.onEditingCanceled()
+                    // For some reason, this can be triggered twice on one back press. This only leads to
+                    // navigateUp, so let's make sure we only call it once
+                    if (!hasBeenCanceled) interactor.onEditingCanceled()
+                    hasBeenCanceled = true
                     // We need to return false to not show display mode
                     return false
                 }
@@ -109,7 +139,11 @@ class ToolbarView(
             })
         }
 
-        ToolbarAutocompleteFeature(view).apply {
+        val engineForSpeculativeConnects = if (!isPrivate) engine else null
+        ToolbarAutocompleteFeature(
+            view,
+            engineForSpeculativeConnects
+        ).apply {
             addDomainProvider(ShippedDomainsProvider().also { it.initialize(view.context) })
             historyStorage?.also(::addHistoryStorageProvider)
         }
@@ -124,6 +158,10 @@ class ToolbarView(
             if (searchState.pastedText.isNullOrEmpty()) {
                 view.setSearchTerms(searchState.session?.searchTerms.orEmpty())
             }
+
+            // We must trigger an onTextChanged so when search terms are set when transitioning to `editMode`
+            // we have the most up to date text
+            interactor.onTextChanged(view.url.toString())
 
             view.editMode()
             isInitialized = true
@@ -144,5 +182,31 @@ class ToolbarView(
 
     companion object {
         private const val TOOLBAR_ELEVATION_IN_DP = 16
+    }
+}
+
+/**
+ * Dynamically sets scroll flags for the top toolbar when the user does not have a screen reader enabled
+ * Note that the bottom toolbar is currently fixed and will never have scroll flags set
+ */
+fun BrowserToolbar.setScrollFlagsForTopToolbar() {
+    // Don't set scroll flags for bottom toolbar
+    if (context.settings().shouldUseBottomToolbar) {
+        if (FeatureFlags.dynamicBottomToolbar && layoutParams is CoordinatorLayout.LayoutParams) {
+            (layoutParams as CoordinatorLayout.LayoutParams).apply {
+                behavior = BrowserToolbarBottomBehavior(context, null)
+            }
+        }
+
+        return
+    }
+
+    val params = layoutParams as AppBarLayout.LayoutParams
+    params.scrollFlags = when (context.settings().shouldUseFixedTopToolbar) {
+        true -> 0
+        false -> {
+            SCROLL_FLAG_SCROLL or SCROLL_FLAG_ENTER_ALWAYS or SCROLL_FLAG_SNAP or
+                SCROLL_FLAG_EXIT_UNTIL_COLLAPSED
+        }
     }
 }

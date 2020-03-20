@@ -7,6 +7,7 @@ package org.mozilla.fenix.settings
 import android.view.View
 import android.widget.RadioButton
 import android.widget.TextView
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.text.HtmlCompat
 import androidx.preference.Preference
 import mozilla.components.feature.sitepermissions.SitePermissions
@@ -20,7 +21,8 @@ fun SitePermissions.toggle(featurePhone: PhoneFeature): SitePermissions {
         PhoneFeature.LOCATION -> copy(location = location.toggle())
         PhoneFeature.MICROPHONE -> copy(microphone = microphone.toggle())
         PhoneFeature.NOTIFICATION -> copy(notification = notification.toggle())
-        PhoneFeature.AUTOPLAY -> copy() // not supported by GV or A-C yet
+        PhoneFeature.AUTOPLAY_AUDIBLE -> copy(autoplayAudible = autoplayAudible.toggle())
+        PhoneFeature.AUTOPLAY_INAUDIBLE -> copy(autoplayInaudible = autoplayInaudible.toggle())
     }
 }
 
@@ -30,7 +32,7 @@ fun SitePermissions.toggle(featurePhone: PhoneFeature): SitePermissions {
  */
 fun RadioButton.setStartCheckedIndicator() {
     val attr = ThemeManager.resolveAttribute(android.R.attr.listChoiceIndicatorSingle, context)
-    val buttonDrawable = context.getDrawable(attr)
+    val buttonDrawable = AppCompatResources.getDrawable(context, attr)
     buttonDrawable?.apply {
         setBounds(0, 0, intrinsicWidth, intrinsicHeight)
     }
@@ -42,12 +44,16 @@ fun initBlockedByAndroidView(phoneFeature: PhoneFeature, blockedByAndroidView: V
     if (!phoneFeature.isAndroidPermissionGranted(context)) {
         blockedByAndroidView.visibility = View.VISIBLE
 
-        val descriptionLabel = blockedByAndroidView.findViewById<TextView>(R.id.blocked_by_android_explanation_label)
-        val text = context.getString(
-            R.string.phone_feature_blocked_by_android_explanation,
+        val descriptionLabel = blockedByAndroidView.findViewById<TextView>(R.id.blocked_by_android_feature_label)
+        val descriptionText = context.getString(
+            R.string.phone_feature_blocked_step_feature,
             phoneFeature.getLabel(context)
         )
-        descriptionLabel.text = HtmlCompat.fromHtml(text, HtmlCompat.FROM_HTML_MODE_COMPACT)
+        descriptionLabel.text = HtmlCompat.fromHtml(descriptionText, HtmlCompat.FROM_HTML_MODE_COMPACT)
+
+        val permissionsLabel = blockedByAndroidView.findViewById<TextView>(R.id.blocked_by_android_permissions_label)
+        val permissionsText = context.getString(R.string.phone_feature_blocked_step_permissions)
+        permissionsLabel.text = HtmlCompat.fromHtml(permissionsText, HtmlCompat.FROM_HTML_MODE_COMPACT)
     } else {
         blockedByAndroidView.visibility = View.GONE
     }

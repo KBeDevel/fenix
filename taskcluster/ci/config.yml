@@ -2,16 +2,18 @@
 trust-domain: mobile
 treeherder:
     group-names:
-        'androidTest': 'Tasks related to the androidTest APK'
-        'beta': 'Nightly-related tasks'
+        'beta': 'Beta-related tasks'
+        'betaFennec': 'Beta-related tasks with same APK configuration as Fennec'
         'debug': 'Builds made for testing'
         'forPerformanceTest': 'Builds made for Raptor and other performance tests'
         'I': 'Docker Image Builds'
         'nightly': 'Nightly-related tasks'
         'nightlyFennec': 'Nightly-related tasks with same APK configuration as Fennec'
         'production': 'Release-related tasks'
+        'productionFennec': 'Production-related tasks with same APK configuration as Fennec'
         'Rap': 'Raptor tests'
         'Rap-P': 'Raptor power tests'
+        'Btime': 'Raptor-Browsertime tests'
 
 task-priority: highest
 
@@ -53,6 +55,11 @@ workers:
             implementation: scriptworker-pushapk
             os: scriptworker
             worker-type: 'mobile-{level}-pushapk'
+        ship-it:
+            provisioner: scriptworker-k8s
+            implementation: scriptworker-shipit
+            os: scriptworker
+            worker-type: 'mobile-{level}-shipit'
         t-bitbar.*:
             provisioner: proj-autophone
             implementation: generic-worker

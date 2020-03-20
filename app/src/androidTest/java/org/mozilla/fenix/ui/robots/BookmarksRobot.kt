@@ -11,18 +11,23 @@ import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.typeText
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers
+import androidx.test.espresso.matcher.ViewMatchers.withChild
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withParent
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.containsString
-import org.junit.Assert
+import org.junit.Assert.assertEquals
 import org.mozilla.fenix.R
+import org.mozilla.fenix.helpers.TestAssetHelper
 import org.mozilla.fenix.helpers.click
+import org.mozilla.fenix.helpers.ext.waitNotNull
 
 /**
  * Implementation of Robot Pattern for the bookmarks menu.
@@ -37,7 +42,13 @@ class BookmarksRobot {
 
     fun verifyBookmarkedURL(url: Uri) = assertBookmarkURL(url)
 
-    fun verifyFolderTitle(title: String) = assertFolderTitle(title)
+    fun verifyFolderTitle(title: String) {
+        mDevice.waitNotNull(
+            Until.findObject(By.text(title)),
+            TestAssetHelper.waitingTime
+        )
+        assertFolderTitle(title)
+    }
 
     fun verifyDeleteSnackBarText() = assertDeleteSnackBarText()
 
@@ -51,13 +62,21 @@ class BookmarksRobot {
 
     fun verifyParentFolderSelector() = assertBookmarkFolderSelector()
 
-    fun verifyHomeScreen() = HomeScreenRobot().verifyHomeScreen()
-
     fun verifyKeyboardHidden() = assertKeyboardVisibility(isExpectedToBeVisible = false)
 
     fun verifyKeyboardVisible() = assertKeyboardVisibility(isExpectedToBeVisible = true)
 
+    fun createFolder(name: String) {
+        clickAddFolderButton()
+        addNewFolderName(name)
+        saveNewFolder()
+    }
+
     fun clickAddFolderButton() {
+        mDevice.waitNotNull(
+            Until.findObject(By.res("org.mozilla.fenix.debug:id/add_bookmark_folder")),
+            TestAssetHelper.waitingTime
+        )
         addFolderButton().click()
     }
 
@@ -75,15 +94,22 @@ class BookmarksRobot {
     }
 
     class Transition {
-        fun goBack(interact: BookmarksRobot.() -> Unit): Transition {
+        fun goBack(interact: HomeScreenRobot.() -> Unit): HomeScreenRobot.Transition {
             goBackButton().click()
 
-            BookmarksRobot().interact()
-            return Transition()
+            HomeScreenRobot().interact()
+            return HomeScreenRobot.Transition()
         }
 
         fun openThreeDotMenu(interact: ThreeDotMenuBookmarksRobot.() -> Unit): ThreeDotMenuBookmarksRobot.Transition {
             threeDotMenu().click()
+
+            ThreeDotMenuBookmarksRobot().interact()
+            return ThreeDotMenuBookmarksRobot.Transition()
+        }
+
+        fun openThreeDotMenu(bookmarkTitle: String, interact: ThreeDotMenuBookmarksRobot.() -> Unit): ThreeDotMenuBookmarksRobot.Transition {
+            threeDotMenu(bookmarkTitle).click()
 
             ThreeDotMenuBookmarksRobot().interact()
             return ThreeDotMenuBookmarksRobot.Transition()
@@ -109,6 +135,13 @@ private fun addFolderButton() = onView(withId(R.id.add_bookmark_folder))
 private fun addFolderTitleField() = onView(withId(R.id.bookmarkNameEdit))
 
 private fun saveFolderButton() = onView(withId(R.id.confirm_add_folder_button))
+
+private fun threeDotMenu(folderName: String) = onView(
+    allOf(
+        withId(R.id.overflow_menu),
+        withParent(withChild(allOf(withId(R.id.title), withText(folderName))))
+    )
+)
 
 private fun threeDotMenu() = onView(withId(R.id.overflow_menu))
 
@@ -164,7 +197,7 @@ private fun assertBookmarkURLEditBox() =
         .check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
 
 private fun assertKeyboardVisibility(isExpectedToBeVisible: Boolean) =
-    Assert.assertEquals(
+    assertEquals(
         isExpectedToBeVisible,
         UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             .executeShellCommand("dumpsys input_method | grep mInputShown")

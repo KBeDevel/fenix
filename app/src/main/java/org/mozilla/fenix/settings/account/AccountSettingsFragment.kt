@@ -14,12 +14,12 @@ import android.text.InputFilter
 import android.text.format.DateUtils
 import android.view.View
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.preference.CheckBoxPreference
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,7 +34,6 @@ import mozilla.components.service.fxa.manager.SyncEnginesStorage
 import mozilla.components.service.fxa.sync.SyncReason
 import mozilla.components.service.fxa.sync.SyncStatusObserver
 import mozilla.components.service.fxa.sync.getLastSynced
-import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.StoreProvider
@@ -43,6 +42,7 @@ import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.getPreferenceKey
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.showToolbar
 
 @SuppressWarnings("TooManyFunctions", "LargeClass")
 class AccountSettingsFragment : PreferenceFragmentCompat() {
@@ -73,8 +73,7 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
 
     override fun onResume() {
         super.onResume()
-        (activity as AppCompatActivity).title = getString(R.string.preferences_account_settings)
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(getString(R.string.preferences_account_settings))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -161,8 +160,9 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
-        // Make sure out sync engine checkboxes are up-to-date.
+        // Make sure out sync engine checkboxes are up-to-date and disabled if currently syncing
         updateSyncEngineStates()
+        setCwtsDisabledWhileSyncing(accountManager.isSyncActive())
 
         val historyNameKey = getPreferenceKey(R.string.pref_key_sync_history)
         findPreference<CheckBoxPreference>(historyNameKey)?.apply {
@@ -257,9 +257,8 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
         }
         val loginsNameKey = getPreferenceKey(R.string.pref_key_sync_logins)
         findPreference<CheckBoxPreference>(loginsNameKey)?.apply {
-            isVisible = FeatureFlags.logins
             isEnabled = syncEnginesStatus.containsKey(SyncEngine.Passwords)
-            isChecked = syncEnginesStatus.getOrElse(SyncEngine.Passwords) { false }
+            isChecked = syncEnginesStatus.getOrElse(SyncEngine.Passwords) { true }
         }
     }
 
@@ -273,7 +272,7 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
             accountManager.authenticatedAccount()
                 ?.deviceConstellation()?.run {
                     refreshDevicesAsync().await()
-                    pollForEventsAsync().await()
+                    pollForCommandsAsync().await()
                 }
         }
     }
@@ -318,6 +317,12 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
+    private fun setCwtsDisabledWhileSyncing(isSyncing: Boolean) {
+        findPreference<PreferenceCategory>(
+            getPreferenceKey(R.string.preferences_sync_category)
+        )?.isEnabled = !isSyncing
+    }
+
     private val syncStatusObserver = object : SyncStatusObserver {
         override fun onStarted() {
             lifecycleScope.launch {
@@ -325,6 +330,7 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
                 view?.announceForAccessibility(getString(R.string.sync_syncing_in_progress))
                 pref?.title = getString(R.string.sync_syncing_in_progress)
                 pref?.isEnabled = false
+                setCwtsDisabledWhileSyncing(true)
             }
         }
 
@@ -341,6 +347,7 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
                 }
                 // Make sure out sync engine checkboxes are up-to-date.
                 updateSyncEngineStates()
+                setCwtsDisabledWhileSyncing(false)
             }
         }
 
@@ -350,6 +357,7 @@ class AccountSettingsFragment : PreferenceFragmentCompat() {
                 val pref = findPreference<Preference>(getPreferenceKey(R.string.pref_key_sync_now))
                 pref?.let {
                     pref.title = getString(R.string.preferences_sync_now)
+                    // We want to only enable the sync button, and not the checkboxes here
                     pref.isEnabled = true
 
                     val failedTime = getLastSynced(requireContext())

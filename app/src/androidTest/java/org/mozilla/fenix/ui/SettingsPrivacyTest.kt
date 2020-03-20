@@ -7,14 +7,21 @@ package org.mozilla.fenix.ui
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import okhttp3.mockwebserver.MockWebServer
-import org.junit.Rule
-import org.junit.Before
 import org.junit.After
+import org.junit.Before
 import org.junit.Ignore
+import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.helpers.AndroidAssetDispatcher
 import org.mozilla.fenix.helpers.HomeActivityTestRule
+import org.mozilla.fenix.helpers.TestAssetHelper
+import org.mozilla.fenix.helpers.TestHelper
+import org.mozilla.fenix.helpers.TestHelper.openAppFromExternalLink
+import org.mozilla.fenix.helpers.TestHelper.restartApp
+import org.mozilla.fenix.ui.robots.addToHomeScreen
+import org.mozilla.fenix.ui.robots.browserScreen
 import org.mozilla.fenix.ui.robots.homeScreen
+import org.mozilla.fenix.ui.robots.navigationToolbar
 
 /**
  *  Tests for verifying the main three dot menu options
@@ -26,6 +33,7 @@ class SettingsPrivacyTest {
 
     private val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private lateinit var mockWebServer: MockWebServer
+    private val pageShortcutName = "TestShortcut"
 
     @get:Rule
     val activityTestRule = HomeActivityTestRule()
@@ -93,18 +101,207 @@ class SettingsPrivacyTest {
             // PRIVACY
             verifyPrivacyHeading()
             verifyEnhancedTrackingProtectionButton()
-            verifyEnhancedTrackingProtectionValue()
+            verifyEnhancedTrackingProtectionValue("On")
             // Logins
             verifyLoginsButton()
             // drill down to submenu
-            verifyAddPrivateBrowsingShortcutButton()
+            verifyPrivateBrowsingButton()
             verifySitePermissionsButton()
             // drill down on search
             verifyDeleteBrowsingDataButton()
             verifyDeleteBrowsingDataOnQuitButton()
             verifyDataCollectionButton()
-            verifyPrivacyNoticeButton()
             verifyLeakCanaryButton()
+        }
+    }
+
+    // Tests only for initial state without signing in.
+    // For tests after singing in, see SyncIntegration test suite
+
+    @Test
+    fun loginsAndPasswordsTest() {
+        homeScreen {
+        }.openThreeDotMenu {
+        }.openSettings {
+            // Necessary to scroll a little bit for all screen sizes
+            TestHelper.scrollToElementByText("Logins and passwords")
+        }.openLoginsAndPasswordSubMenu {
+            verifyDefaultView()
+            verifyDefaultValueSyncLogins()
+        }.openSavedLogins {
+            verifySavedLoginsView()
+            tapSetupLater()
+            // Verify that logins list is empty
+            // Issue #7272 nothing is shown
+        }.goBack {
+        }.openSyncLogins {
+            verifyReadyToScanOption()
+            verifyUseEmailOption()
+        }
+    }
+
+    @Test
+    @Ignore("Passes locally, fails on CI. Fix in https://github.com/mozilla-mobile/fenix/issues/9189")
+    fun saveLoginFromPromptTest() {
+        val saveLoginTest =
+            TestAssetHelper.getSaveLoginAsset(mockWebServer)
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(saveLoginTest.url) {
+            verifySaveLoginPromptIsShown()
+            // Click save to save the login
+            saveLoginFromPrompt("Save")
+        }.openHomeScreen {
+        }.openThreeDotMenu {
+        }.openSettings {
+            TestHelper.scrollToElementByText("Logins and passwords")
+        }.openLoginsAndPasswordSubMenu {
+            verifyDefaultView()
+            verifyDefaultValueSyncLogins()
+        }.openSavedLogins {
+            verifySavedLoginsView()
+            tapSetupLater()
+            // Verify that the login appears correctly
+            verifySavedLoginFromPrompt()
+        }
+    }
+
+    @Test
+    @Ignore("Passes locally, fails on CI. Fix in https://github.com/mozilla-mobile/fenix/issues/9189")
+    fun doNotSaveLoginFromPromptTest() {
+        val saveLoginTest = TestAssetHelper.getSaveLoginAsset(mockWebServer)
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(saveLoginTest.url) {
+            verifySaveLoginPromptIsShown()
+            // Don't save the login
+            saveLoginFromPrompt("Don’t save")
+        }.openHomeScreen {
+        }.openThreeDotMenu {
+        }.openSettings {
+        }.openLoginsAndPasswordSubMenu {
+            verifyDefaultView()
+            verifyDefaultValueSyncLogins()
+        }.openSavedLogins {
+            verifySavedLoginsView()
+            tapSetupLater()
+            // Verify that the login list is empty
+            verifyNotSavedLoginFromPromt()
+        }
+    }
+
+    @Test
+    fun saveLoginsAndPasswordsOptions() {
+        homeScreen {
+        }.openThreeDotMenu {
+        }.openSettings {
+        }.openLoginsAndPasswordSubMenu {
+        }.saveLoginsAndPasswordsOptions {
+            verifySaveLoginsOptionsView()
+        }
+    }
+
+    @Test
+    fun verifyPrivateBrowsingMenuItemsTest() {
+        homeScreen {
+        }.openThreeDotMenu {
+        }.openSettings {
+        }.openPrivateBrowsingSubMenu {
+            verifyAddPrivateBrowsingShortcutButton()
+            verifyOpenLinksInPrivateTab()
+            verifyOpenLinksInPrivateTabOff()
+        }.goBack {
+            verifySettingsView()
+        }
+    }
+
+    @Test
+    fun openExternalLinksInPrivateTest() {
+        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
+
+        setOpenLinksInPrivateOn()
+
+        openAppFromExternalLink(defaultWebPage.url.toString())
+
+        browserScreen {
+        }.openHomeScreen {
+            verifyPrivateSessionHeader()
+        }
+
+        setOpenLinksInPrivateOff()
+
+        openAppFromExternalLink(defaultWebPage.url.toString())
+
+        browserScreen {
+        }.openHomeScreen {
+            verifyOpenTabsHeader()
+        }
+    }
+
+    @Test
+    fun launchPageShortcutInPrivateModeTest() {
+        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
+
+        setOpenLinksInPrivateOn()
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(defaultWebPage.url) {
+        }.openThreeDotMenu {
+        }.openAddToHomeScreen {
+            addShortcutName(pageShortcutName)
+            clickAddShortcutButton()
+            clickAddAutomaticallyButton()
+        }.openHomeScreenShortcut(pageShortcutName) {
+        }.openHomeScreen {
+            verifyPrivateSessionHeader()
+        }
+    }
+
+    @Test
+    fun launchLinksInPrivateToggleOffStateDoesntChangeTest() {
+        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
+
+        setOpenLinksInPrivateOn()
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(defaultWebPage.url) {
+        }.openThreeDotMenu {
+        }.openAddToHomeScreen {
+            addShortcutName(pageShortcutName)
+            clickAddShortcutButton()
+            clickAddAutomaticallyButton()
+        }.openHomeScreenShortcut(pageShortcutName) {
+        }.openHomeScreen {}
+
+        setOpenLinksInPrivateOff()
+        restartApp(activityTestRule)
+        mDevice.waitForIdle()
+
+        addToHomeScreen {
+        }.searchAndOpenHomeScreenShortcut(pageShortcutName) {
+        }.openHomeScreen {
+            verifyOpenTabsHeader()
+        }.openThreeDotMenu {
+        }.openSettings {
+        }.openPrivateBrowsingSubMenu {
+            verifyOpenLinksInPrivateTabOff()
+        }
+
+    }
+
+    @Test
+    fun addPrivateBrowsingShortcut() {
+        homeScreen {
+        }.openThreeDotMenu {
+        }.openSettings {
+        }.openPrivateBrowsingSubMenu {
+            addPrivateShortcutToHomescreen()
+            verifyPrivateBrowsingShortcutIcon()
+        }.openPrivateBrowsingShortcut {
+            verifySearchView()
+        }.openBrowser {
+        }.openHomeScreen {
+            verifyPrivateSessionHeader()
         }
     }
 
@@ -240,6 +437,11 @@ class SettingsPrivacyTest {
         // Return to home screen and verify that all tabs, history and collection are gone
         //
         // Verify xxx
+        //
+        // New: If coming from  tab -> settings -> delete browsing data
+        // then expect to return to home screen
+        // If coming from tab -> home -> settings -> delete browsing data
+        // then expect return to settings (after which you can return to home manually)
     }
 
     @Ignore("This is a stub test, ignore for now")
@@ -272,5 +474,31 @@ class SettingsPrivacyTest {
         // Select settings
         // Click on Leak Canary toggle
         // Verify 'dump' message
+    }
+}
+
+private fun setOpenLinksInPrivateOn() {
+    homeScreen {
+    }.openThreeDotMenu {
+    }.openSettings {
+    }.openPrivateBrowsingSubMenu {
+        verifyOpenLinksInPrivateTabEnabled()
+        clickOpenLinksInPrivateTabSwitch()
+    }.goBack {
+    }.goBack {
+        verifyHomeComponent()
+    }
+}
+
+private fun setOpenLinksInPrivateOff() {
+    homeScreen {
+    }.openThreeDotMenu {
+    }.openSettings {
+    }.openPrivateBrowsingSubMenu {
+        clickOpenLinksInPrivateTabSwitch()
+        verifyOpenLinksInPrivateTabOff()
+    }.goBack {
+    }.goBack {
+        verifyHomeComponent()
     }
 }

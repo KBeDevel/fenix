@@ -38,9 +38,15 @@ def build_worker_definition(config, tasks):
         worker_definition["certificate-alias"] = "{}-{}".format(
             task["worker"]["product"], task["worker"]["channel"]
         )
+
+        build_type = task["attributes"]["build-type"]
         # Fenix production doesn't follow the rule {product}-{channel}
-        if task["attributes"]["build-type"] == "production":
+        if build_type == "production":
             worker_definition["certificate-alias"] = "fenix"
+        # Neither do Fennec flavored builds
+        elif build_type.startswith("fennec-"):
+            worker_definition["certificate-alias"] = build_type
 
         task["worker"].update(worker_definition)
+
         yield task

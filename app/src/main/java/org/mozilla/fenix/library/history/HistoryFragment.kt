@@ -12,17 +12,16 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import androidx.annotation.MenuRes
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import kotlinx.android.synthetic.main.fragment_history.view.*
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.lib.state.ext.consumeFrom
-import mozilla.components.support.base.feature.BackHandler
+import mozilla.components.support.base.feature.UserInteractionHandler
 import org.mozilla.fenix.BrowserDirection
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
@@ -34,11 +33,11 @@ import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.showToolbar
 import org.mozilla.fenix.library.LibraryPageFragment
-import org.mozilla.fenix.share.ShareTab
 
 @SuppressWarnings("TooManyFunctions", "LargeClass")
-class HistoryFragment : LibraryPageFragment<HistoryItem>(), BackHandler {
+class HistoryFragment : LibraryPageFragment<HistoryItem>(), UserInteractionHandler {
     private lateinit var historyStore: HistoryFragmentStore
     private lateinit var historyView: HistoryView
     private lateinit var historyInteractor: HistoryInteractor
@@ -115,21 +114,17 @@ class HistoryFragment : LibraryPageFragment<HistoryItem>(), BackHandler {
             historyView.update(it)
         }
 
-        viewModel.history.observe(this, Observer {
+        viewModel.history.observe(viewLifecycleOwner, Observer {
             historyView.historyAdapter.submitList(it)
         })
     }
 
     override fun onResume() {
         super.onResume()
-        (activity as AppCompatActivity).apply {
-            title = getString(R.string.library_history)
-            supportActionBar?.show()
-        }
+        showToolbar(getString(R.string.library_history))
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        @MenuRes
         val menuRes = when (historyStore.state.mode) {
             HistoryFragmentState.Mode.Normal -> R.menu.library_menu
             is HistoryFragmentState.Mode.Editing -> R.menu.history_select_multi
@@ -143,18 +138,8 @@ class HistoryFragment : LibraryPageFragment<HistoryItem>(), BackHandler {
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.share_history_multi_select -> {
             val selectedHistory = historyStore.state.mode.selectedItems
-            val shareTabs = selectedHistory.map { ShareTab(it.url, it.title) }
-            when {
-                selectedHistory.size == 1 ->
-                    share(
-                        url = selectedHistory.first().url,
-                        title = selectedHistory.first().title,
-                        tabs = shareTabs
-                    )
-                selectedHistory.size > 1 -> {
-                    share(tabs = shareTabs)
-                }
-            }
+            val shareTabs = selectedHistory.map { ShareData(url = it.url, title = it.title) }
+            share(shareTabs)
             true
         }
         R.id.delete_history_multi_select -> {
@@ -243,14 +228,11 @@ class HistoryFragment : LibraryPageFragment<HistoryItem>(), BackHandler {
         }
     }
 
-    private fun share(url: String? = null, title: String? = null, tabs: List<ShareTab>? = null) {
+    private fun share(data: List<ShareData>) {
         requireComponents.analytics.metrics.track(Event.HistoryItemShared)
-        val directions =
-            HistoryFragmentDirections.actionHistoryFragmentToShareFragment(
-                url = url,
-                title = title,
-                tabs = tabs?.toTypedArray()
-            )
+        val directions = HistoryFragmentDirections.actionHistoryFragmentToShareFragment(
+            data = data.toTypedArray()
+        )
         nav(R.id.historyFragment, directions)
     }
 }

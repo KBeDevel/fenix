@@ -17,7 +17,7 @@ url = "https://nimbledroid.com/api/v2/apks"
 
 def uploadApk(apk,key):
 	headers = {"Accept":"*/*"}
-	payload = {'auto_scenarios':'false'}
+	payload = {'auto_scenarios':'false', 'device_config': 'android5,android7'}
 	response = requests.post(url, auth=(key, ''), headers=headers, files=apk, data=payload)
 
 	if response.status_code != 201:
@@ -37,6 +37,10 @@ token_file = sys.argv[2]
 
 with open(token_file) as f:
 	key = f.read()
+
+if key.rstrip() == "faketoken":
+	print('Nimbledroid key "faketoken" detected. Not uploading anything to the service.')
+	sys.exit(0)
 
 with open(apk_path) as apk_file:
 	uploadApk({'apk': apk_file}, key)

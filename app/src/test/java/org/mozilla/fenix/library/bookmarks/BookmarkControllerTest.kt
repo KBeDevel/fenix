@@ -22,13 +22,14 @@ import io.mockk.verifyOrder
 import mozilla.appservices.places.BookmarkRoot
 import mozilla.components.concept.storage.BookmarkNode
 import mozilla.components.concept.storage.BookmarkNodeType
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.mozilla.fenix.BrowserDirection
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
-import org.mozilla.fenix.components.FenixSnackbarPresenter
+import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.Services
 import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.components
@@ -40,7 +41,7 @@ class BookmarkControllerTest {
 
     private val context: Context = mockk(relaxed = true)
     private val navController: NavController = mockk(relaxed = true)
-    private val snackbarPresenter: FenixSnackbarPresenter = mockk(relaxed = true)
+    private val snackbar: FenixSnackbar = mockk(relaxed = true)
     private val deleteBookmarkNodes: (Set<BookmarkNode>, Event) -> Unit = mockk(relaxed = true)
     private val invokePendingDeletion: () -> Unit = mockk(relaxed = true)
 
@@ -78,7 +79,8 @@ class BookmarkControllerTest {
         // needed for mocking 'getSystemService<ClipboardManager>()'
         mockkStatic(
             "androidx.core.content.ContextCompat",
-            "android.content.ClipData"
+            "android.content.ClipData",
+            "org.mozilla.fenix.ext.ContextKt"
         )
 
         every { homeActivity.components.services } returns services
@@ -89,7 +91,7 @@ class BookmarkControllerTest {
         controller = DefaultBookmarkController(
             context = homeActivity,
             navController = navController,
-            snackbarPresenter = snackbarPresenter,
+            snackbar = snackbar,
             deleteBookmarkNodes = deleteBookmarkNodes,
             invokePendingDeletion = invokePendingDeletion
         )
@@ -101,9 +103,23 @@ class BookmarkControllerTest {
 
         verifyOrder {
             invokePendingDeletion.invoke()
-            homeActivity.browsingModeManager.mode = BrowsingMode.Normal
             homeActivity.openToBrowserAndLoad(item.url!!, true, BrowserDirection.FromBookmarks)
         }
+    }
+
+    @Test
+    fun `handleBookmarkTapped should respect browsing mode`() {
+        // if in normal mode, should be in normal mode
+        every { homeActivity.browsingModeManager.mode } returns BrowsingMode.Normal
+
+        controller.handleBookmarkTapped(item)
+        assertEquals(BrowsingMode.Normal, homeActivity.browsingModeManager.mode)
+
+        // if in private mode, should be in private mode
+        every { homeActivity.browsingModeManager.mode } returns BrowsingMode.Private
+
+        controller.handleBookmarkTapped(item)
+        assertEquals(BrowsingMode.Private, homeActivity.browsingModeManager.mode)
     }
 
     @Test
@@ -112,7 +128,10 @@ class BookmarkControllerTest {
 
         verify {
             invokePendingDeletion.invoke()
-            navController.navigate(BookmarkFragmentDirections.actionBookmarkFragmentSelf(tree.guid))
+            navController.navigate(
+                BookmarkFragmentDirections.actionBookmarkFragmentSelf(tree.guid),
+                null
+            )
         }
     }
 
@@ -134,7 +153,8 @@ class BookmarkControllerTest {
             navController.navigate(
                 BookmarkFragmentDirections.actionBookmarkFragmentToBookmarkEditFragment(
                     item.guid
-                )
+                ),
+                null
             )
         }
     }
@@ -146,7 +166,8 @@ class BookmarkControllerTest {
         controller.handleBookmarkSelected(root)
 
         verify {
-            snackbarPresenter.present(errorMessage, any(), any(), any())
+            snackbar.setText(errorMessage)
+            snackbar.show()
         }
     }
 
@@ -161,19 +182,20 @@ class BookmarkControllerTest {
 
         verifyOrder {
             ClipData.newPlainText(item.url, item.url)
-            snackbarPresenter.present(urlCopiedMessage, any(), any(), any())
+            snackbar.setText(urlCopiedMessage)
+            snackbar.show()
         }
     }
 
     @Test
     fun `handleBookmarkSharing should navigate to the 'Share' fragment`() {
         val navDirectionsSlot = slot<NavDirections>()
-        every { navController.navigate(capture(navDirectionsSlot)) } just Runs
+        every { navController.navigate(capture(navDirectionsSlot), null) } just Runs
 
         controller.handleBookmarkSharing(item)
 
         verify {
-            navController.navigate(navDirectionsSlot.captured)
+            navController.navigate(navDirectionsSlot.captured, null)
         }
     }
 

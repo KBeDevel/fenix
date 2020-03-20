@@ -6,35 +6,55 @@ package org.mozilla.fenix.trackingprotection
 
 import android.os.Bundle
 import android.view.View
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.navArgs
 import kotlinx.android.synthetic.main.fragment_tracking_protection_blocking.*
 import org.mozilla.fenix.R
+import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.showToolbar
 
 class TrackingProtectionBlockingFragment :
     Fragment(R.layout.fragment_tracking_protection_blocking) {
 
     private val args: TrackingProtectionBlockingFragmentArgs by navArgs()
+    private var isCustomProtection: Boolean = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        isCustomProtection = requireContext().settings().useCustomTrackingProtection
+    }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        category_fingerprinters.isVisible = args.strictMode
-        category_tracking_content.isVisible = args.strictMode
+
+        when (args.protectionMode) {
+
+            getString(R.string.preference_enhanced_tracking_protection_standard_option) -> {
+                category_fingerprinters.isVisible = false
+                category_tracking_content.isVisible = false
+            }
+
+            getString(R.string.preference_enhanced_tracking_protection_strict) -> return
+
+            getString(R.string.preference_enhanced_tracking_protection_custom) -> {
+                category_fingerprinters.isVisible =
+                    requireContext().settings().blockFingerprintersInCustomTrackingProtection
+                category_cryptominers.isVisible =
+                    requireContext().settings().blockCryptominersInCustomTrackingProtection
+                category_cookies.isVisible =
+                    requireContext().settings().blockCookiesInCustomTrackingProtection
+                category_tracking_content.isVisible =
+                    requireContext().settings().blockTrackingContentInCustomTrackingProtection
+            }
+
+            else -> return
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        (activity as AppCompatActivity).title = getTitle()
-        (activity as AppCompatActivity).supportActionBar?.show()
-    }
-
-    private fun getTitle(): String {
-        return if (args.strictMode) {
-            getString(R.string.preference_enhanced_tracking_protection_strict_default)
-        } else {
-            getString(R.string.preference_enhanced_tracking_protection_standard_option)
-        }
+        showToolbar(args.protectionMode)
     }
 }

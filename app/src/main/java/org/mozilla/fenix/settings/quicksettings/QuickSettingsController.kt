@@ -95,17 +95,22 @@ class DefaultQuickSettingsController(
         when (permission.isBlockedByAndroid) {
             true -> handleAndroidPermissionRequest(featureToggled.androidPermissionsList)
             false -> {
-                sitePermissions = sitePermissions!!.toggle(featureToggled).also {
-                    handlePermissionsChange(it)
-                }
+                val permissions = sitePermissions
+                if (permissions != null) {
+                    val newPermissions = permissions.toggle(featureToggled).also {
+                        handlePermissionsChange(it)
+                    }
 
-                quickSettingsStore.dispatch(
-                    WebsitePermissionAction.TogglePermission(
-                        permission,
-                        featureToggled.getActionLabel(context, sitePermissions, settings),
-                        featureToggled.shouldBeEnabled(context, sitePermissions, settings)
+                    quickSettingsStore.dispatch(
+                        WebsitePermissionAction.TogglePermission(
+                            permission,
+                            featureToggled.getActionLabel(context, newPermissions, settings),
+                            featureToggled.shouldBeEnabled(context, newPermissions, settings)
+                        )
                     )
-                )
+                } else {
+                    navigateToManagePhoneFeature(featureToggled)
+                }
             }
         }
     }
@@ -157,6 +162,8 @@ class DefaultQuickSettingsController(
         is WebsitePermission.Microphone -> PhoneFeature.MICROPHONE
         is WebsitePermission.Notification -> PhoneFeature.NOTIFICATION
         is WebsitePermission.Location -> PhoneFeature.LOCATION
+        is WebsitePermission.AutoplayAudible -> PhoneFeature.AUTOPLAY_AUDIBLE
+        is WebsitePermission.AutoplayInaudible -> PhoneFeature.AUTOPLAY_INAUDIBLE
     }
 
     /**
@@ -171,7 +178,6 @@ class DefaultQuickSettingsController(
         val defaultEnabled = false
         val defaultVisible = false
         val defaultBlockedByAndroid = false
-        val defaultWebsitePermission: WebsitePermission? = null
 
         return when (this) {
             PhoneFeature.CAMERA -> WebsitePermission.Camera(
@@ -186,7 +192,23 @@ class DefaultQuickSettingsController(
             PhoneFeature.NOTIFICATION -> WebsitePermission.Notification(
                 defaultStatus, defaultVisible, defaultEnabled, defaultBlockedByAndroid
             )
-            PhoneFeature.AUTOPLAY -> defaultWebsitePermission!! // fail-fast
+            PhoneFeature.AUTOPLAY_AUDIBLE -> WebsitePermission.AutoplayAudible(
+                defaultStatus, defaultVisible, defaultEnabled, defaultBlockedByAndroid
+            )
+            PhoneFeature.AUTOPLAY_INAUDIBLE -> WebsitePermission.AutoplayInaudible(
+                defaultStatus, defaultVisible, defaultEnabled, defaultBlockedByAndroid
+            )
         }
+    }
+
+    /**
+     * Navigate to toggle [SitePermissions] for the specified [PhoneFeature]
+     *
+     * @param phoneFeature [PhoneFeature] to toggle [SitePermissions] for.
+     */
+    private fun navigateToManagePhoneFeature(phoneFeature: PhoneFeature) {
+        val directions = QuickSettingsSheetDialogFragmentDirections
+            .actionQuickSettingsSheetDialogFragmentToSitePermissionsManagePhoneFeature(phoneFeature.id)
+        navController.navigate(directions)
     }
 }

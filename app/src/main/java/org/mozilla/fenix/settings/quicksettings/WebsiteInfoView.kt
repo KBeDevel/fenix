@@ -10,10 +10,10 @@ import android.view.ViewGroup
 import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import kotlinx.android.extensions.LayoutContainer
 import kotlinx.android.synthetic.main.quicksettings_website_info.view.*
-import mozilla.components.support.ktx.android.view.putCompoundDrawablesRelativeWithIntrinsicBounds
 import org.mozilla.fenix.R
 
 /**
@@ -36,11 +36,22 @@ class WebsiteInfoView(
      */
     fun update(state: WebsiteInfoState) {
         bindUrl(state.websiteUrl)
+        bindTitle(state.websiteTitle)
         bindSecurityInfo(state.securityInfoRes, state.iconRes, state.iconTintRes)
+        bindCertificateName(state.certificateName)
     }
 
     private fun bindUrl(url: String) {
         view.url.text = url
+    }
+
+    private fun bindTitle(title: String) {
+        view.title.text = title
+    }
+
+    private fun bindCertificateName(cert: String) {
+        val certificateLabel = view.context.getString(R.string.certificate_info_verified_by, cert)
+        view.certificateInfo.text = certificateLabel
     }
 
     private fun bindSecurityInfo(
@@ -48,9 +59,9 @@ class WebsiteInfoView(
         @DrawableRes iconRes: Int,
         @ColorRes iconTintRes: Int
     ) {
-        val icon = view.context.getDrawable(iconRes)
+        val icon = AppCompatResources.getDrawable(view.context, iconRes)
         icon?.setTint(ContextCompat.getColor(view.context, iconTintRes))
         view.securityInfo.setText(securityInfoRes)
-        view.securityInfo.putCompoundDrawablesRelativeWithIntrinsicBounds(start = icon)
+        view.securityInfoIcon.setImageResource(iconRes)
     }
 }

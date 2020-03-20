@@ -4,17 +4,18 @@
 
 package org.mozilla.fenix.collections
 
-import android.graphics.PorterDuff.Mode.SRC_IN
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.graphics.BlendModeColorFilterCompat.createBlendModeColorFilterCompat
+import androidx.core.graphics.BlendModeCompat.SRC_IN
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.collections_list_item.view.*
+import mozilla.components.feature.tab.collections.TabCollection
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.description
 import org.mozilla.fenix.ext.getIconColor
-import org.mozilla.fenix.home.sessioncontrol.Tab
-import org.mozilla.fenix.home.sessioncontrol.TabCollection
+import org.mozilla.fenix.home.Tab
 
 class SaveCollectionListAdapter(
     private val interactor: CollectionCreationInteractor
@@ -52,11 +53,8 @@ class CollectionViewHolder(view: View) : RecyclerView.ViewHolder(view) {
     fun bind(collection: TabCollection) {
         itemView.collection_item.text = collection.title
         itemView.collection_description.text = collection.description(itemView.context)
-
-        itemView.collection_icon.setColorFilter(
-            collection.getIconColor(itemView.context),
-            SRC_IN
-        )
+        itemView.collection_icon.colorFilter =
+            createBlendModeColorFilterCompat(collection.getIconColor(itemView.context), SRC_IN)
     }
 
     companion object {

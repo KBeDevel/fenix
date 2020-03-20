@@ -5,11 +5,9 @@
 package org.mozilla.fenix.customtabs
 
 import android.content.Context
-import android.view.Gravity
 import android.view.View
-import androidx.core.view.isGone
 import androidx.navigation.fragment.navArgs
-import kotlinx.android.synthetic.main.component_search.*
+import kotlinx.android.synthetic.main.component_browser_top_toolbar.*
 import kotlinx.android.synthetic.main.fragment_browser.view.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mozilla.components.browser.session.Session
@@ -26,9 +24,11 @@ import mozilla.components.feature.pwa.feature.WebAppSiteControlsFeature
 import mozilla.components.feature.session.TrackingProtectionUseCases
 import mozilla.components.feature.sitepermissions.SitePermissions
 import mozilla.components.lib.state.ext.consumeFrom
-import mozilla.components.support.base.feature.BackHandler
+import mozilla.components.support.base.feature.UserInteractionHandler
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import mozilla.components.support.ktx.android.arch.lifecycle.addObservers
+import org.mozilla.fenix.FeatureFlags
+import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
 import org.mozilla.fenix.browser.BaseBrowserFragment
 import org.mozilla.fenix.browser.CustomTabContextMenuCandidate
@@ -36,12 +36,13 @@ import org.mozilla.fenix.browser.FenixSnackbarDelegate
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.settings
 
 /**
  * Fragment used for browsing the web within external apps.
  */
 @ExperimentalCoroutinesApi
-class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
+class ExternalAppBrowserFragment : BaseBrowserFragment(), UserInteractionHandler {
 
     private val args by navArgs<ExternalAppBrowserFragmentArgs>()
 
@@ -68,10 +69,13 @@ class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
                         sessionId = customTabSessionId,
                         activity = activity,
                         engineLayout = view.swipeRefresh,
-                        onItemTapped = { browserInteractor.onBrowserToolbarMenuItemTapped(it) }
+                        onItemTapped = { browserInteractor.onBrowserToolbarMenuItemTapped(it) },
+                        isPrivate = (activity as HomeActivity).browsingModeManager.mode.isPrivate,
+                        shouldReverseItems = !activity.settings().shouldUseBottomToolbar
                     ),
                     owner = this,
-                    view = view)
+                    view = view
+                )
 
                 windowFeature.set(
                     feature = CustomTabWindowFeature(
@@ -90,7 +94,7 @@ class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
                         customTabSessionId,
                         trustedScopes
                     ) { toolbarVisible ->
-                        updateLayoutMargins(inFullScreen = !toolbarVisible)
+                        if (!FeatureFlags.dynamicBottomToolbar) { updateLayoutMargins(inFullScreen = !toolbarVisible) }
                     },
                     owner = this,
                     view = toolbar
@@ -146,8 +150,6 @@ class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
                         }
                     }
             }
-
-            updateLayoutMargins(false)
         }
     }
 
@@ -160,9 +162,11 @@ class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
             .actionExternalAppBrowserFragmentToQuickSettingsSheetDialogFragment(
                 sessionId = session.id,
                 url = session.url,
+                title = session.title,
                 isSecured = session.securityInfo.secure,
                 sitePermissions = sitePermissions,
-                gravity = getAppropriateLayoutGravity()
+                gravity = getAppropriateLayoutGravity(),
+                certificateName = session.securityInfo.issuer
             )
         nav(R.id.externalAppBrowserFragment, directions)
     }
@@ -186,16 +190,6 @@ class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
         }
     }
 
-    override fun getEngineMargins(): Pair<Int, Int> {
-        val toolbarHidden = toolbar.isGone
-        return if (toolbarHidden) {
-            0 to 0
-        } else {
-            val toolbarSize = resources.getDimensionPixelSize(R.dimen.browser_toolbar_height)
-            toolbarSize to 0
-        }
-    }
-
     override fun getContextMenuCandidates(
         context: Context,
         view: View
@@ -203,11 +197,6 @@ class ExternalAppBrowserFragment : BaseBrowserFragment(), BackHandler {
         context,
         context.components.useCases.contextMenuUseCases,
         view,
-        FenixSnackbarDelegate(
-            view,
-            null
-        )
+        FenixSnackbarDelegate(view)
     )
-
-    override fun getAppropriateLayoutGravity() = Gravity.TOP
 }

@@ -5,29 +5,31 @@
 package org.mozilla.fenix.settings.quicksettings
 
 import androidx.navigation.NavController
+import androidx.navigation.NavDirections
 import assertk.assertAll
 import assertk.assertThat
 import assertk.assertions.isEqualTo
-import assertk.assertions.isFailure
 import assertk.assertions.isInstanceOf
 import assertk.assertions.isSameAs
 import assertk.assertions.isTrue
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.verify
 import io.mockk.verifyOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.TestCoroutineScope
 import mozilla.components.browser.session.Session
 import mozilla.components.feature.session.SessionUseCases
 import mozilla.components.feature.sitepermissions.SitePermissions
 import mozilla.components.feature.sitepermissions.SitePermissions.Status.NO_DECISION
 import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.support.test.robolectric.testContext
+import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.fenix.TestApplication
@@ -39,16 +41,16 @@ import org.mozilla.fenix.utils.Settings
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
-@UseExperimental(ObsoleteCoroutinesApi::class)
+@ExperimentalCoroutinesApi
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestApplication::class)
 class DefaultQuickSettingsControllerTest {
     private val context = testContext
     private val store = mockk<QuickSettingsFragmentStore>()
-    private val coroutinesScope = GlobalScope
+    private val coroutinesScope = TestCoroutineScope()
     private val navController = mockk<NavController>(relaxed = true)
     private val browserSession = mockk<Session>()
-    private val sitePermissions = SitePermissions(origin = "", savedAt = 123)
+    private val sitePermissions: SitePermissions = SitePermissions(origin = "", savedAt = 123)
     private val appSettings = mockk<Settings>(relaxed = true)
     private val permissionStorage = mockk<PermissionStorage>(relaxed = true)
     private val reload = mockk<SessionUseCases.ReloadUrlUseCase>(relaxed = true)
@@ -102,6 +104,7 @@ class DefaultQuickSettingsControllerTest {
     }
 
     @Test
+    @Ignore("Disabling because of intermittent failures https://github.com/mozilla-mobile/fenix/issues/8621")
     fun `handlePermissionToggled allowed by Android should toggle the permissions and modify View's state`() {
         val permissionName = "CAMERA"
         val websitePermission = mockk<WebsitePermission.Camera>()
@@ -118,9 +121,8 @@ class DefaultQuickSettingsControllerTest {
         // We want to verify that the Status is toggled and this event is passed to Controller also.
         assertThat(sitePermissions.camera).isSameAs(NO_DECISION)
         verifyOrder {
-            sitePermissions.toggle(capture(toggledFeature)).also {
-                controller.handlePermissionsChange(it)
-            }
+            val permission = sitePermissions.toggle(capture(toggledFeature))
+            controller.handlePermissionsChange(permission)
         }
         // We should also modify View's state. Not necessarily as the last operation.
         verify {
@@ -134,6 +136,36 @@ class DefaultQuickSettingsControllerTest {
             assertThat(action.captured).isInstanceOf(WebsitePermissionAction.TogglePermission::class)
             assertThat((action.captured as WebsitePermissionAction.TogglePermission).websitePermission)
                 .isInstanceOf(websitePermission::class)
+        }
+    }
+
+    @Test
+    fun `handlePermissionToggled blocked by user should navigate to site permission manager`() {
+        val websitePermission = mockk<WebsitePermission.Camera>()
+        val invalidSitePermissionsController = DefaultQuickSettingsController(
+            context = context,
+            quickSettingsStore = store,
+            coroutineScope = coroutinesScope,
+            navController = navController,
+            session = browserSession,
+            sitePermissions = null,
+            settings = appSettings,
+            permissionStorage = permissionStorage,
+            reload = reload,
+            addNewTab = addNewTab,
+            requestRuntimePermissions = requestPermissions,
+            reportSiteIssue = reportIssue,
+            displayPermissions = displayPermissions,
+            dismiss = dismiss
+        )
+
+        every { websitePermission.isBlockedByAndroid } returns false
+        every { navController.navigate(any<NavDirections>()) } just Runs
+
+        invalidSitePermissionsController.handlePermissionToggled(websitePermission)
+
+        verify {
+            navController.navigate(any<NavDirections>())
         }
     }
 
@@ -186,6 +218,7 @@ class DefaultQuickSettingsControllerTest {
 
     @Test
     @ExperimentalCoroutinesApi
+    @Ignore("Intermittently failing; https://github.com/mozilla-mobile/fenix/issues/8621")
     fun `handlePermissionsChange should store the updated permission and reload webpage`() =
         runBlocking {
             val testPermissions = mockk<SitePermissions>()
@@ -235,8 +268,10 @@ class DefaultQuickSettingsControllerTest {
                     .isInstanceOf(WebsitePermission.Notification::class)
                 assertThat(PhoneFeature.LOCATION.getCorrespondingPermission())
                     .isInstanceOf(WebsitePermission.Location::class)
-                assertThat { PhoneFeature.AUTOPLAY.getCorrespondingPermission() }
-                    .isFailure().isInstanceOf(KotlinNullPointerException::class)
+                assertThat(PhoneFeature.AUTOPLAY_AUDIBLE.getCorrespondingPermission())
+                    .isInstanceOf(WebsitePermission.AutoplayAudible::class)
+                assertThat(PhoneFeature.AUTOPLAY_INAUDIBLE.getCorrespondingPermission())
+                    .isInstanceOf(WebsitePermission.AutoplayInaudible::class)
             }
         }
     }

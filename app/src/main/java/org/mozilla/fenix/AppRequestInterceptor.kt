@@ -5,39 +5,38 @@
 package org.mozilla.fenix
 
 import android.content.Context
-import androidx.annotation.RawRes
+import android.net.ConnectivityManager
+import androidx.core.content.getSystemService
 import mozilla.components.browser.errorpages.ErrorPages
 import mozilla.components.browser.errorpages.ErrorType
 import mozilla.components.concept.engine.EngineSession
 import mozilla.components.concept.engine.request.RequestInterceptor
 import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.components
-import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.isOnline
 
 class AppRequestInterceptor(private val context: Context) : RequestInterceptor {
     override fun onLoadRequest(
-        session: EngineSession,
-        uri: String
+        engineSession: EngineSession,
+        uri: String,
+        hasUserGesture: Boolean,
+        isSameDomain: Boolean
     ): RequestInterceptor.InterceptionResponse? {
-        adjustTrackingProtection(context, session)
-        // WebChannel-driven authentication does not require a separate redirect interceptor.
-        return if (context.isInExperiment(Experiments.asFeatureWebChannelsDisabled)) {
-            context.components.services.accountsAuthFeature.interceptor.onLoadRequest(session, uri)
-        } else {
-            null
-        }
-    }
+        var result: RequestInterceptor.InterceptionResponse? = null
 
-    private fun adjustTrackingProtection(context: Context, session: EngineSession) {
-        val trackingProtectionEnabled = context.settings().shouldUseTrackingProtection
-        if (!trackingProtectionEnabled) {
-            session.disableTrackingProtection()
-        } else {
-            val core = context.components.core
-            val policy = core.createTrackingProtectionPolicy(normalMode = true)
-            core.engine.settings.trackingProtectionPolicy = policy
-            session.enableTrackingProtection(policy)
+        // WebChannel-driven authentication does not require a separate redirect interceptor.
+        @Suppress("ConstantConditionIf")
+        if (FeatureFlags.asFeatureWebChannelsDisabled) {
+            result = context.components.services.accountsAuthFeature.interceptor.onLoadRequest(
+                    engineSession, uri, hasUserGesture, isSameDomain)
         }
+
+        if (result == null) {
+            result = context.components.services.appLinksInterceptor.onLoadRequest(
+                engineSession, uri, hasUserGesture, isSameDomain)
+        }
+
+        return result
     }
 
     override fun onErrorRequest(
@@ -45,19 +44,35 @@ class AppRequestInterceptor(private val context: Context) : RequestInterceptor {
         errorType: ErrorType,
         uri: String?
     ): RequestInterceptor.ErrorResponse? {
-        val riskLevel = getRiskLevel(errorType)
+        val improvedErrorType = improveErrorType(errorType)
+        val riskLevel = getRiskLevel(improvedErrorType)
 
-        context.components.analytics.metrics.track(Event.ErrorPageVisited(errorType))
+        context.components.analytics.metrics.track(Event.ErrorPageVisited(improvedErrorType))
 
-        return RequestInterceptor.ErrorResponse(
-            ErrorPages.createErrorPage(
-                context,
-                errorType,
-                uri = uri,
-                htmlResource = riskLevel.htmlRes,
-                cssResource = riskLevel.cssRes
-            )
+        val errorPageUri = ErrorPages.createUrlEncodedErrorPage(
+            context = context,
+            errorType = improvedErrorType,
+            uri = uri,
+            htmlResource = riskLevel.htmlRes
         )
+
+        return RequestInterceptor.ErrorResponse.Uri(errorPageUri)
+    }
+
+    /**
+     * Where possible, this will make the error type more accurate by including information not
+     * available to AC.
+     */
+    private fun improveErrorType(errorType: ErrorType): ErrorType {
+        // This is not an ideal solution. For context, see:
+        // https://github.com/mozilla-mobile/android-components/pull/5068#issuecomment-558415367
+
+        val isConnected: Boolean = context.getSystemService<ConnectivityManager>()!!.isOnline()
+
+        return when {
+            errorType == ErrorType.ERROR_UNKNOWN_HOST && !isConnected -> ErrorType.ERROR_NO_INTERNET
+            else -> errorType
+        }
     }
 
     private fun getRiskLevel(errorType: ErrorType): RiskLevel = when (errorType) {
@@ -79,6 +94,7 @@ class AppRequestInterceptor(private val context: Context) : RequestInterceptor {
         ErrorType.ERROR_FILE_ACCESS_DENIED,
         ErrorType.ERROR_PROXY_CONNECTION_REFUSED,
         ErrorType.ERROR_UNKNOWN_PROXY_HOST,
+        ErrorType.ERROR_NO_INTERNET,
         ErrorType.ERROR_UNKNOWN_PROTOCOL -> RiskLevel.Low
 
         ErrorType.ERROR_SECURITY_BAD_CERT,
@@ -91,9 +107,14 @@ class AppRequestInterceptor(private val context: Context) : RequestInterceptor {
         ErrorType.ERROR_SAFEBROWSING_UNWANTED_URI -> RiskLevel.High
     }
 
-    private enum class RiskLevel(@RawRes val htmlRes: Int, @RawRes val cssRes: Int) {
-        Low(R.raw.low_risk_error_pages, R.raw.low_and_medium_risk_error_style),
-        Medium(R.raw.medium_and_high_risk_error_pages, R.raw.low_and_medium_risk_error_style),
-        High(R.raw.medium_and_high_risk_error_pages, R.raw.high_risk_error_style),
+    internal enum class RiskLevel(val htmlRes: String) {
+        Low(LOW_AND_MEDIUM_RISK_ERROR_PAGES),
+        Medium(LOW_AND_MEDIUM_RISK_ERROR_PAGES),
+        High(HIGH_RISK_ERROR_PAGES),
+    }
+
+    companion object {
+        internal const val LOW_AND_MEDIUM_RISK_ERROR_PAGES = "low_and_medium_risk_error_pages.html"
+        internal const val HIGH_RISK_ERROR_PAGES = "high_risk_error_pages.html"
     }
 }

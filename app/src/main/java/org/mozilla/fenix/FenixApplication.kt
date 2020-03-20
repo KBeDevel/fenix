@@ -5,44 +5,50 @@
 package org.mozilla.fenix
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.os.Build
 import android.os.Build.VERSION.SDK_INT
 import android.os.StrictMode
 import androidx.annotation.CallSuper
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.getSystemService
-import io.reactivex.plugins.RxJavaPlugins
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mozilla.appservices.Megazord
+import mozilla.components.browser.session.Session
 import mozilla.components.concept.push.PushProcessor
-import mozilla.components.service.experiments.Experiments
-import mozilla.components.service.fretboard.Fretboard
-import mozilla.components.service.fretboard.source.kinto.KintoExperimentSource
-import mozilla.components.service.fretboard.storage.flatfile.FlatFileExperimentStorage
+import mozilla.components.feature.addons.update.GlobalAddonDependencyProvider
+import mozilla.components.service.glean.Glean
+import mozilla.components.service.glean.config.Configuration
+import mozilla.components.service.glean.net.ConceptFetchHttpUploader
 import mozilla.components.support.base.log.Log
 import mozilla.components.support.base.log.logger.Logger
 import mozilla.components.support.base.log.sink.AndroidLogSink
 import mozilla.components.support.ktx.android.content.isMainProcess
 import mozilla.components.support.ktx.android.content.runOnlyInMainProcess
+import mozilla.components.support.locale.LocaleAwareApplication
 import mozilla.components.support.rusthttp.RustHttpConfig
 import mozilla.components.support.rustlog.RustLog
-import org.mozilla.fenix.GleanMetrics.ExperimentsMetrics
+import mozilla.components.support.webextensions.WebExtensionSupport
+import org.mozilla.fenix.FeatureFlags.webPushIntegration
 import org.mozilla.fenix.components.Components
+import org.mozilla.fenix.components.metrics.MetricServiceType
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.push.PushFxaIntegration
+import org.mozilla.fenix.push.WebPushEngineIntegration
 import org.mozilla.fenix.session.NotificationSessionObserver
+import org.mozilla.fenix.session.PerformanceActivityLifecycleCallbacks
 import org.mozilla.fenix.session.VisibilityLifecycleCallback
-import java.io.File
+import org.mozilla.fenix.utils.BrowsersCache
+import org.mozilla.fenix.utils.Settings
 
 @SuppressLint("Registered")
-@Suppress("TooManyFunctions")
-open class FenixApplication : Application() {
-    lateinit var fretboard: Fretboard
-    lateinit var experimentLoader: Deferred<Boolean>
+@Suppress("TooManyFunctions", "LargeClass")
+open class FenixApplication : LocaleAwareApplication() {
+    private val logger = Logger("FenixApplication")
 
     open val components by lazy { Components(this) }
 
@@ -62,7 +68,31 @@ open class FenixApplication : Application() {
             return
         }
 
+        if (Config.channel.isFenix) {
+            // We need to always initialize Glean and do it early here.
+            // Note that we are only initializing Glean here for "fenix" builds. "fennec" builds
+            // will initialize in MigratingFenixApplication because we first need to migrate the
+            // user's choice from Fennec.
+            initializeGlean()
+        }
+
         setupInMainProcessOnly()
+    }
+
+    protected fun initializeGlean() {
+        val telemetryEnabled = settings().isTelemetryEnabled
+
+        logger.debug("Initializing Glean (uploadEnabled=$telemetryEnabled, isFennec=${Config.channel.isFennec})")
+
+        Glean.initialize(
+            applicationContext = this,
+            configuration = Configuration(
+                channel = BuildConfig.BUILD_TYPE,
+                httpClient = ConceptFetchHttpUploader(
+                    lazy(LazyThreadSafetyMode.NONE) { components.core.client }
+                )),
+            uploadEnabled = telemetryEnabled
+        )
     }
 
     @CallSuper
@@ -75,47 +105,34 @@ open class FenixApplication : Application() {
 
     @CallSuper
     open fun setupInMainProcessOnly() {
-        setupMegazord()
+        run {
+            // Attention: Do not invoke any code from a-s in this scope.
+            val megazordSetup = setupMegazord()
 
-        // We want rust logging to go through the log sinks.
-        // This has to happen after initializing the megazord.
-        RustLog.enable()
+            setDayNightTheme()
+            enableStrictMode()
+            warmBrowsersCache()
 
-        setDayNightTheme()
+            // Make sure the engine is initialized and ready to use.
+            components.core.engine.warmUp()
 
-        registerRxExceptionHandling()
-        enableStrictMode()
+            initializeWebExtensionSupport()
 
-        // Make sure the engine is initialized and ready to use.
-        components.core.engine.warmUp()
-
-        // We want to call this function as early as possible, but only once and
-        // on the main process, as it uses Gecko to fetch experiments from the server.
-        experimentLoader = loadExperiments()
-
-        // Enable the service-experiments component
-        if (settings().isExperimentationEnabled && Config.channel.isReleaseOrBeta) {
-            Experiments.initialize(
-                applicationContext,
-                mozilla.components.service.experiments.Configuration(
-                    httpClient = lazy(LazyThreadSafetyMode.NONE) { components.core.client }
-                )
-            )
-        }
-
-        // When the `fenix-test-2019-08-05` experiment is active, record its branch in Glean
-        // telemetry. This will be used to validate that the experiment system correctly enrolls
-        // clients and segments them into branches. Note that this will not take effect the first
-        // time the application has launched, since there won't be enough time for the experiments
-        // library to get a list of experiments. It will take effect the second time the
-        // application is launched.
-        Experiments.withExperiment("fenix-test-2019-08-05") { branchName ->
-            ExperimentsMetrics.activeExperiment.set(branchName)
+            // Just to make sure it is impossible for any application-services pieces
+            // to invoke parts of itself that require complete megazord initialization
+            // before that process completes, we wait here, if necessary.
+            if (!megazordSetup.isCompleted) {
+                runBlocking { megazordSetup.await(); }
+            }
         }
 
         setupLeakCanary()
         if (settings().isTelemetryEnabled) {
-            components.analytics.metrics.start()
+            components.analytics.metrics.start(MetricServiceType.Data)
+        }
+
+        if (settings().isMarketingTelemetryEnabled) {
+            components.analytics.metrics.start(MetricServiceType.Marketing)
         }
 
         setupPush()
@@ -125,11 +142,30 @@ open class FenixApplication : Application() {
 
         components.core.sessionManager.register(NotificationSessionObserver(this))
 
-        if ((System.currentTimeMillis() - settings().lastPlacesStorageMaintenance) > ONE_DAY_MILLIS) {
-            runStorageMaintenance()
+        // Storage maintenance disabled, for now, as it was interfering with background migrations.
+        // See https://github.com/mozilla-mobile/fenix/issues/7227 for context.
+        // if ((System.currentTimeMillis() - settings().lastPlacesStorageMaintenance) > ONE_DAY_MILLIS) {
+        //    runStorageMaintenance()
+        // }
+
+        registerActivityLifecycleCallbacks(
+            PerformanceActivityLifecycleCallbacks(components.performance.visualCompletenessTaskManager)
+        )
+
+        components.performance.visualCompletenessTaskManager.add {
+            GlobalScope.launch(Dispatchers.IO) {
+                logger.info("Initializing storage after visual completeness...")
+                components.core.lazyHistoryStorage.value
+                components.core.lazyBookmarksStorage.value
+                components.core.lazyPasswordsStorage.value
+            }
         }
     }
 
+    // See https://github.com/mozilla-mobile/fenix/issues/7227 for context.
+    // To re-enable this, we need to do so in a way that won't interfere with any startup operations
+    // which acquire reserved+ sqlite lock. Currently, Fennec migrations need to write to storage
+    // on startup, and since they run in a background service we can't simply order these operations.
     private fun runStorageMaintenance() {
         GlobalScope.launch(Dispatchers.IO) {
             // Bookmarks and history storage sit on top of the same db file so we only need to
@@ -137,12 +173,6 @@ open class FenixApplication : Application() {
             components.core.bookmarksStorage.runMaintenance()
         }
         settings().lastPlacesStorageMaintenance = System.currentTimeMillis()
-    }
-
-    private fun registerRxExceptionHandling() {
-        RxJavaPlugins.setErrorHandler {
-            throw it.cause ?: it
-        }
     }
 
     protected open fun setupLeakCanary() {
@@ -153,38 +183,26 @@ open class FenixApplication : Application() {
         // no-op, LeakCanary is disabled by default
     }
 
-    private fun loadExperiments(): Deferred<Boolean> {
-        val experimentsFile = File(filesDir, EXPERIMENTS_JSON_FILENAME)
-        val experimentSource = KintoExperimentSource(
-            EXPERIMENTS_BASE_URL,
-            EXPERIMENTS_BUCKET_NAME,
-            EXPERIMENTS_COLLECTION_NAME,
-            components.core.client
-        )
-        // TODO add ValueProvider to keep clientID in sync with Glean when ready
-        fretboard = Fretboard(experimentSource, FlatFileExperimentStorage(experimentsFile))
-
-        return GlobalScope.async(Dispatchers.IO) {
-            fretboard.loadExperiments()
-            Logger.debug("Bucket is ${fretboard.getUserBucket(this@FenixApplication)}")
-            Logger.debug("Experiments active: ${fretboard.getExperimentsMap(this@FenixApplication)}")
-            fretboard.updateExperiments()
-            return@async true
-        }
-    }
-
     private fun setupPush() {
         // Sets the PushFeature as the singleton instance for push messages to go to.
         // We need the push feature setup here to deliver messages in the case where the service
         // starts up the app first.
-        components.backgroundServices.push?.let { autoPushFeature ->
+        components.push.feature?.let {
             Logger.info("AutoPushFeature is configured, initializing it...")
 
             // Install the AutoPush singleton to receive messages.
-            PushProcessor.install(autoPushFeature)
+            PushProcessor.install(it)
+
+            if (webPushIntegration) {
+                // WebPush integration to observe and deliver push messages to engine.
+                WebPushEngineIntegration(components.core.engine, it).start()
+            }
+
+            // Perform a one-time initialization of the account manager if a message is received.
+            PushFxaIntegration(it, lazy { components.backgroundServices.accountManager }).launch()
 
             // Initialize the service. This could potentially be done in a coroutine in the future.
-            autoPushFeature.initialize()
+            it.initialize()
         }
     }
 
@@ -198,24 +216,30 @@ open class FenixApplication : Application() {
     /**
      * Initiate Megazord sequence! Megazord Battle Mode!
      *
-     * The application-services combined libraries are known as the "megazord". The default megazord
-     * contains several features that fenix doesn't need, and so we swap out with a customized fenix-specific
-     * version of the megazord. The best explanation for what this is, and why it's done is the a-s
-     * documentation on the topic:
+     * The application-services combined libraries are known as the "megazord". We use the default `full`
+     * megazord - it contains everything that fenix needs, and (currently) nothing more.
+     *
+     * Documentation on what megazords are, and why they're needed:
      * - https://github.com/mozilla/application-services/blob/master/docs/design/megazords.md
      * - https://mozilla.github.io/application-services/docs/applications/consuming-megazord-libraries.html
      */
-    private fun setupMegazord() {
-        // Note: This must be called as soon as possible
+    private fun setupMegazord(): Deferred<Unit> {
+        // Note: Megazord.init() must be called as soon as possible ...
         Megazord.init()
-        // This (and enabling RustLog) may be delayed if needed for performance reasons
-        RustHttpConfig.setClient(lazy { components.core.client })
+
+        return GlobalScope.async(Dispatchers.IO) {
+            // ... but RustHttpConfig.setClient() and RustLog.enable() can be called later.
+            RustHttpConfig.setClient(lazy { components.core.client })
+            RustLog.enable()
+        }
     }
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+
         runOnlyInMainProcess {
-            components.core.sessionManager.onLowMemory()
+            components.core.icons.onTrimMemory(level)
+            components.core.sessionManager.onTrimMemory(level)
         }
     }
 
@@ -261,8 +285,16 @@ open class FenixApplication : Application() {
         }
     }
 
+    private fun warmBrowsersCache() {
+        // We avoid blocking the main thread for BrowsersCache on startup by loading it on
+        // background thread.
+        GlobalScope.launch(Dispatchers.Default) {
+            BrowsersCache.all(this@FenixApplication)
+        }
+    }
+
     private fun enableStrictMode() {
-        if (BuildConfig.DEBUG) {
+        if (Config.channel.isDebug) {
             StrictMode.setThreadPolicy(
                 StrictMode.ThreadPolicy.Builder()
                     .detectAll()
@@ -283,7 +315,45 @@ open class FenixApplication : Application() {
         }
     }
 
-    companion object {
-        private const val ONE_DAY_MILLIS = 24 * 60 * 60 * 1000
+    private fun initializeWebExtensionSupport() {
+        try {
+            GlobalAddonDependencyProvider.initialize(
+                components.addonManager,
+                components.addonUpdater,
+                onCrash = { exception ->
+                    components.analytics.crashReporter.submitCaughtException(exception)
+                }
+            )
+            WebExtensionSupport.initialize(
+                components.core.engine,
+                components.core.store,
+                onNewTabOverride = {
+                    _, engineSession, url ->
+                        val shouldCreatePrivateSession =
+                            components.core.sessionManager.selectedSession?.private
+                                ?: Settings.instance?.openLinksInAPrivateTab
+                                ?: false
+
+                        val session = Session(url, shouldCreatePrivateSession)
+                        components.core.sessionManager.add(session, true, engineSession)
+                        session.id
+                },
+                onCloseTabOverride = {
+                    _, sessionId -> components.tabsUseCases.removeTab(sessionId)
+                },
+                onSelectTabOverride = {
+                    _, sessionId ->
+                        val selected = components.core.sessionManager.findSessionById(sessionId)
+                        selected?.let { components.tabsUseCases.selectTab(it) }
+                },
+                onExtensionsLoaded = { extensions ->
+                    components.addonUpdater.registerForFutureUpdates(extensions)
+                    components.supportedAddChecker.registerForChecks()
+                },
+                onUpdatePermissionRequest = components.addonUpdater::onUpdatePermissionRequest
+            )
+        } catch (e: UnsupportedOperationException) {
+            Logger.error("Failed to initialize web extension support", e)
+        }
     }
 }

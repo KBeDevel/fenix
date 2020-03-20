@@ -10,25 +10,29 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.PopupWindow
-import androidx.appcompat.app.AppCompatActivity
+import androidx.annotation.LayoutRes
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.lifecycle.LifecycleOwner
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.extensions.LayoutContainer
 import kotlinx.android.synthetic.main.browser_toolbar_popup_window.view.copy
 import kotlinx.android.synthetic.main.browser_toolbar_popup_window.view.paste
 import kotlinx.android.synthetic.main.browser_toolbar_popup_window.view.paste_and_go
+import kotlinx.android.synthetic.main.component_browser_top_toolbar.view.app_bar
 import mozilla.components.browser.domains.autocomplete.ShippedDomainsProvider
 import mozilla.components.browser.session.Session
 import mozilla.components.browser.toolbar.BrowserToolbar
 import mozilla.components.browser.toolbar.display.DisplayToolbar
 import mozilla.components.support.ktx.android.util.dpToFloat
-import org.jetbrains.anko.dimen
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.FenixSnackbar
+import org.mozilla.fenix.customtabs.CustomTabToolbarIntegration
 import org.mozilla.fenix.customtabs.CustomTabToolbarMenu
 import org.mozilla.fenix.ext.bookmarkStorage
 import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.search.toolbar.setScrollFlagsForTopToolbar
 import org.mozilla.fenix.theme.ThemeManager
 
 interface BrowserToolbarViewInteractor {
@@ -37,22 +41,32 @@ interface BrowserToolbarViewInteractor {
     fun onBrowserToolbarClicked()
     fun onBrowserToolbarMenuItemTapped(item: ToolbarMenu.Item)
     fun onTabCounterClicked()
+    fun onBrowserMenuDismissed(lowPrioHighlightItems: List<ToolbarMenu.Item>)
 }
 
 class BrowserToolbarView(
     private val container: ViewGroup,
+    private val shouldUseBottomToolbar: Boolean,
     private val interactor: BrowserToolbarViewInteractor,
-    private val customTabSession: Session?
+    private val customTabSession: Session?,
+    private val lifecycleOwner: LifecycleOwner
 ) : LayoutContainer {
 
     override val containerView: View?
         get() = container
 
-    private val urlBackground = LayoutInflater.from(container.context)
-        .inflate(R.layout.layout_url_background, container, false)
+    private val settings = container.context.settings()
 
-    val view: BrowserToolbar = LayoutInflater.from(container.context)
-        .inflate(R.layout.component_search, container, true)
+    @LayoutRes
+    private val toolbarLayout = when {
+        settings.shouldUseBottomToolbar -> R.layout.component_bottom_browser_toolbar
+        else -> R.layout.component_browser_top_toolbar
+    }
+
+    private val layout = LayoutInflater.from(container.context)
+        .inflate(toolbarLayout, container, true)
+
+    val view: BrowserToolbar = layout
         .findViewById(R.id.toolbar)
 
     val toolbarIntegration: ToolbarIntegration
@@ -67,14 +81,14 @@ class BrowserToolbarView(
             val popupWindow = PopupWindow(
                 customView,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                view.context.dimen(R.dimen.context_menu_height),
+                view.context.resources.getDimensionPixelSize(R.dimen.context_menu_height),
                 true
             )
 
             val selectedSession = container.context.components.core.sessionManager.selectedSession
 
             popupWindow.elevation =
-                view.context.dimen(R.dimen.mozac_browser_menu_elevation).toFloat()
+                view.context.resources.getDimension(R.dimen.mozac_browser_menu_elevation)
 
             customView.paste.isVisible = !clipboard.text.isNullOrEmpty() && !isCustomTabSession
             customView.paste_and_go.isVisible =
@@ -90,7 +104,6 @@ class BrowserToolbarView(
 
                 FenixSnackbar.make(view, Snackbar.LENGTH_SHORT)
                     .setText(view.context.getString(R.string.browser_toolbar_url_copied_to_clipboard_snackbar))
-                    .setAnchorView(view)
                     .show()
             }
 
@@ -106,7 +119,7 @@ class BrowserToolbarView(
 
             popupWindow.showAsDropDown(
                 view,
-                view.context.dimen(R.dimen.context_menu_x_offset),
+                view.context.resources.getDimensionPixelSize(R.dimen.context_menu_x_offset),
                 0,
                 Gravity.START
             )
@@ -118,6 +131,8 @@ class BrowserToolbarView(
             val sessionManager = components.core.sessionManager
 
             view.apply {
+                setScrollFlagsForTopToolbar()
+
                 elevation = TOOLBAR_ELEVATION.dpToFloat(resources.displayMetrics)
 
                 if (!isCustomTabSession) {
@@ -129,10 +144,10 @@ class BrowserToolbarView(
                     false
                 }
 
-                display.progressGravity = if (isCustomTabSession) {
-                    DisplayToolbar.Gravity.BOTTOM
-                } else {
+                display.progressGravity = if (shouldUseBottomToolbar) {
                     DisplayToolbar.Gravity.TOP
+                } else {
+                    DisplayToolbar.Gravity.BOTTOM
                 }
 
                 val primaryTextColor = ContextCompat.getColor(
@@ -161,49 +176,67 @@ class BrowserToolbarView(
                 display.hint = context.getString(R.string.search_hint)
             }
 
-            val menuToolbar = if (isCustomTabSession) {
-                CustomTabToolbarMenu(
+            val menuToolbar: ToolbarMenu
+            if (isCustomTabSession) {
+                menuToolbar = CustomTabToolbarMenu(
                     this,
                     sessionManager,
                     customTabSession?.id,
+                    shouldReverseItems = !shouldUseBottomToolbar,
                     onItemTapped = {
                         interactor.onBrowserToolbarMenuItemTapped(it)
                     }
                 )
             } else {
-                DefaultToolbarMenu(
+                menuToolbar = DefaultToolbarMenu(
                     context = this,
                     hasAccountProblem = components.backgroundServices.accountManager.accountNeedsReauth(),
-                    requestDesktopStateProvider = {
-                        sessionManager.selectedSession?.desktopMode ?: false
-                    },
-                    readerModeStateProvider = {
-                        sessionManager.selectedSession?.readerMode ?: false
-                    },
+                    shouldReverseItems = !shouldUseBottomToolbar,
                     onItemTapped = { interactor.onBrowserToolbarMenuItemTapped(it) },
-                    lifecycleOwner = container.context as AppCompatActivity,
+                    lifecycleOwner = lifecycleOwner,
                     sessionManager = sessionManager,
                     bookmarksStorage = bookmarkStorage
                 )
+                view.display.setMenuDismissAction {
+                    interactor.onBrowserMenuDismissed(menuToolbar.getLowPrioHighlightItems())
+                    view.invalidateActions()
+                }
             }
 
-            toolbarIntegration = ToolbarIntegration(
-                this,
-                view,
-                menuToolbar,
-                ShippedDomainsProvider().also { it.initialize(this) },
-                components.core.historyStorage,
-                components.core.sessionManager,
-                customTabSession?.id,
-                customTabSession?.private ?: sessionManager.selectedSession?.private ?: false,
-                interactor
-            )
+            toolbarIntegration = if (customTabSession != null) {
+                CustomTabToolbarIntegration(
+                    this,
+                    view,
+                    menuToolbar,
+                    customTabSession.id,
+                    isPrivate = customTabSession.private
+                )
+            } else {
+                DefaultToolbarIntegration(
+                    this,
+                    view,
+                    menuToolbar,
+                    ShippedDomainsProvider().also { it.initialize(this) },
+                    components.core.historyStorage,
+                    components.core.sessionManager,
+                    sessionId = null,
+                    isPrivate = sessionManager.selectedSession?.private ?: false,
+                    interactor = interactor,
+                    engine = components.core.engine
+                )
+            }
         }
     }
 
     @Suppress("UNUSED_PARAMETER")
     fun update(state: BrowserFragmentState) {
         // Intentionally leaving this as a stub for now since we don't actually want to update currently
+    }
+
+    fun expand() {
+        if (!settings.shouldUseBottomToolbar) {
+            layout.app_bar?.setExpanded(true)
+        }
     }
 
     companion object {

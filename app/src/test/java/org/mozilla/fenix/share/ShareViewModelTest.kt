@@ -11,11 +11,19 @@ import android.content.pm.ResolveInfo
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import androidx.core.content.getSystemService
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.spyk
 import io.mockk.verify
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestCoroutineDispatcher
+import kotlinx.coroutines.test.runBlockingTest
+import mozilla.components.feature.share.RecentApp
+import mozilla.components.feature.share.RecentAppsStorage
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertEquals
@@ -25,6 +33,8 @@ import org.junit.runner.RunWith
 import org.mozilla.fenix.TestApplication
 import org.mozilla.fenix.ext.application
 import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.isOnline
+import org.mozilla.fenix.share.ShareViewModel.Companion.RECENT_APPS_LIMIT
 import org.mozilla.fenix.share.listadapters.AppShareOption
 import org.mozilla.fenix.share.listadapters.SyncShareOption
 import org.robolectric.RobolectricTestRunner
@@ -32,6 +42,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestApplication::class)
+@ExperimentalCoroutinesApi
 class ShareViewModelTest {
 
     private val packageName = "org.mozilla.fenix"
@@ -48,11 +59,12 @@ class ShareViewModelTest {
         connectivityManager = mockk(relaxed = true)
         fxaAccountManager = mockk(relaxed = true)
 
+        mockkStatic("org.mozilla.fenix.ext.ConnectivityManagerKt")
+
         every { application.packageName } returns packageName
         every { application.packageManager } returns packageManager
         every { application.getSystemService<ConnectivityManager>() } returns connectivityManager
         every { application.components.backgroundServices.accountManager } returns fxaAccountManager
-        every { connectivityManager.activeNetworkInfo } returns mockk(relaxed = true)
 
         viewModel = ShareViewModel(application)
     }
@@ -64,10 +76,38 @@ class ShareViewModelTest {
     }
 
     @Test
-    fun `loadDevicesAndApps registers networkCallback`() = runBlocking {
+    fun `loadDevicesAndApps`() = runBlockingTest {
+        mockkStatic(Dispatchers::class)
+        every {
+            Dispatchers.IO
+        } returns TestCoroutineDispatcher()
+        viewModel = spyk(viewModel)
+        val drawable: Drawable = mockk()
+        val appOptions = ArrayList<AppShareOption>()
+        val appElement = AppShareOption("Label", drawable, "Package", "Activity")
+        appOptions.add(appElement)
+
+        val recentAppOptions = ArrayList<RecentApp>()
+        val appEntity: RecentApp = mockk()
+        every { appEntity.packageName } returns "Package"
+        recentAppOptions.add(appEntity)
+        val storage: RecentAppsStorage = mockk(relaxed = true)
+        viewModel.recentAppsStorage = storage
+
+        every { viewModel.buildAppsList(any(), any()) } returns appOptions
+        every { storage.updateDatabaseWithNewApps(appOptions.map { app -> app.packageName }) } just Runs
+        every { storage.getRecentAppsUpTo(RECENT_APPS_LIMIT) } returns recentAppOptions
+
         viewModel.loadDevicesAndApps()
 
-        verify { connectivityManager.registerNetworkCallback(any(), eq(viewModel.networkCallback)) }
+        verify {
+            connectivityManager.registerNetworkCallback(
+                any(),
+                any<ConnectivityManager.NetworkCallback>()
+            )
+        }
+        assertEquals(1, viewModel.recentAppsList.value?.size)
+        assertEquals(0, viewModel.appsList.value?.size)
     }
 
     @Test
@@ -91,16 +131,16 @@ class ShareViewModelTest {
 
     @Test
     fun `buildDevicesList returns offline option`() {
-        every { connectivityManager.activeNetworkInfo.isConnected } returns false
+        every { connectivityManager.isOnline() } returns false
         assertEquals(listOf(SyncShareOption.Offline), viewModel.buildDeviceList(fxaAccountManager))
 
-        every { connectivityManager.activeNetworkInfo } returns null
+        every { connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork) } returns null
         assertEquals(listOf(SyncShareOption.Offline), viewModel.buildDeviceList(fxaAccountManager))
     }
 
     @Test
     fun `buildDevicesList returns sign-in option`() {
-        every { connectivityManager.activeNetworkInfo.isConnected } returns true
+        every { connectivityManager.isOnline() } returns true
         every { fxaAccountManager.authenticatedAccount() } returns null
 
         assertEquals(listOf(SyncShareOption.SignIn), viewModel.buildDeviceList(fxaAccountManager))
@@ -108,11 +148,14 @@ class ShareViewModelTest {
 
     @Test
     fun `buildDevicesList returns reconnect option`() {
-        every { connectivityManager.activeNetworkInfo.isConnected } returns true
+        every { connectivityManager.isOnline() } returns true
         every { fxaAccountManager.authenticatedAccount() } returns mockk()
         every { fxaAccountManager.accountNeedsReauth() } returns true
 
-        assertEquals(listOf(SyncShareOption.Reconnect), viewModel.buildDeviceList(fxaAccountManager))
+        assertEquals(
+            listOf(SyncShareOption.Reconnect),
+            viewModel.buildDeviceList(fxaAccountManager)
+        )
     }
 
     private fun createResolveInfo(

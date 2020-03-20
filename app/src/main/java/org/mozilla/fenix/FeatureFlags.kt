@@ -25,17 +25,46 @@ object FeatureFlags {
     const val mediaIntegration = true
 
     /**
-     * Gives option in Settings to disable auto play media
-     */
-    val autoPlayMedia = Config.channel.isNightlyOrDebug
-
-    /**
      * Allows Progressive Web Apps to be installed to the device home screen.
      */
     val progressiveWebApps = Config.channel.isNightlyOrDebug
 
     /**
-     * Gives option in Settings to see logins and sync logins
+     * Disables FxA Application Services Web Channels feature
      */
-    val logins = Config.channel.isNightlyOrDebug
+    const val asFeatureWebChannelsDisabled = false
+
+    /**
+     * Disables FxA Application Services Sync feature
+     */
+    const val asFeatureSyncDisabled = false
+
+    /**
+     * Disables FxA Application Services Pairing feature
+     */
+    const val asFeatureFxAPairingDisabled = false
+
+    /**
+     * Enables dynamic bottom toolbar
+     */
+    val dynamicBottomToolbar = Config.channel.isNightlyOrDebug
+
+    /**
+     * Enables the new language picker
+     */
+    val fenixLanguagePicker = Config.channel.isNightlyOrDebug
+
+    /**
+     * Enables deleting individual tracking protection exceptions.
+     */
+    val deleteIndividualTrackingProtectionExceptions = Config.channel.isNightlyOrDebug
+
+    /**
+     * Integration of push support provided by `feature-push` component into the Gecko engine.
+     *
+     * Behind nightly flag until all fatal bugs are resolved.
+     *
+     * https://github.com/mozilla-mobile/fenix/issues/9059
+     */
+    val webPushIntegration = Config.channel.isNightlyOrDebug
 }

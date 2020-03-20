@@ -23,7 +23,9 @@ import org.mozilla.fenix.components.metrics.MetricController
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.test.Mockable
 import org.mozilla.geckoview.BuildConfig.MOZ_APP_BUILDID
+import org.mozilla.geckoview.BuildConfig.MOZ_APP_VENDOR
 import org.mozilla.geckoview.BuildConfig.MOZ_APP_VERSION
+import org.mozilla.geckoview.BuildConfig.MOZ_UPDATE_CHANNEL
 
 /**
  * Component group for all functionality related to analytics e.g. crash reporting and telemetry.
@@ -51,7 +53,9 @@ class Analytics(
 
         // The name "Fenix" here matches the product name on Socorro and is unrelated to the actual app name:
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1523284
-        val socorroService = MozillaSocorroService(context, appName = "Fenix")
+        val socorroService = MozillaSocorroService(context, appName = "Fenix",
+            version = MOZ_APP_VERSION, buildId = MOZ_APP_BUILDID, vendor = MOZ_APP_VENDOR,
+            releaseChannel = MOZ_UPDATE_CHANNEL)
         services.add(socorroService)
 
         val intent = Intent(context, HomeActivity::class.java).apply {
@@ -84,7 +88,8 @@ class Analytics(
                 LeanplumMetricsService(context as Application),
                 AdjustMetricsService(context)
             ),
-            isTelemetryEnabled = { context.settings().isTelemetryEnabled }
+            isDataTelemetryEnabled = { context.settings().isTelemetryEnabled },
+            isMarketingDataTelemetryEnabled = { context.settings().isMarketingTelemetryEnabled }
         )
     }
 }

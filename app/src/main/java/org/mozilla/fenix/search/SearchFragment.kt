@@ -16,11 +16,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewStub
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import androidx.transition.TransitionInflater
+import androidx.navigation.fragment.navArgs
 import kotlinx.android.synthetic.main.fragment_search.*
 import kotlinx.android.synthetic.main.fragment_search.view.*
 import kotlinx.android.synthetic.main.search_suggestions_onboarding.view.*
@@ -28,25 +28,27 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import mozilla.components.concept.storage.HistoryStorage
 import mozilla.components.feature.qr.QrFeature
 import mozilla.components.lib.state.ext.consumeFrom
-import mozilla.components.support.base.feature.BackHandler
+import mozilla.components.support.base.feature.UserInteractionHandler
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import mozilla.components.support.ktx.android.content.hasCamera
 import mozilla.components.support.ktx.android.content.isPermissionGranted
+import mozilla.components.ui.autocomplete.InlineAutocompleteEditText
 import org.mozilla.fenix.BrowserDirection
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.StoreProvider
 import org.mozilla.fenix.components.metrics.Event
+import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.getSpannable
+import org.mozilla.fenix.ext.hideToolbar
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.search.awesomebar.AwesomeBarView
 import org.mozilla.fenix.search.toolbar.ToolbarView
 import org.mozilla.fenix.settings.SupportUtils
-import org.mozilla.fenix.ext.components
-import org.mozilla.fenix.ext.settings
 
 @Suppress("TooManyFunctions", "LargeClass")
-class SearchFragment : Fragment(), BackHandler {
+class SearchFragment : Fragment(), UserInteractionHandler {
     private lateinit var toolbarView: ToolbarView
     private lateinit var awesomeBarView: AwesomeBarView
     private val qrFeature = ViewBoundFeatureWrapper<QrFeature>()
@@ -54,30 +56,16 @@ class SearchFragment : Fragment(), BackHandler {
     private lateinit var searchStore: SearchFragmentStore
     private lateinit var searchInteractor: SearchInteractor
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        postponeEnterTransition()
-        sharedElementEnterTransition =
-            TransitionInflater.from(context).inflateTransition(android.R.transition.move)
-                .setDuration(
-                    SHARED_TRANSITION_MS
-                )
-        requireComponents.analytics.metrics.track(Event.InteractWithSearchURLArea)
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        val session = arguments
-            ?.let(SearchFragmentArgs.Companion::fromBundle)
-            ?.let { it.sessionId }
+        val args = arguments?.let { navArgs<SearchFragmentArgs>().value }
+        val session = args?.sessionId
             ?.let(requireComponents.core.sessionManager::findSessionById)
-
-        val pastedText = arguments
-            ?.let(SearchFragmentArgs.Companion::fromBundle)
-            ?.let { it.pastedText }
+        val pastedText = args?.pastedText
+        val searchAccessPoint = args?.searchAccessPoint
 
         val view = inflater.inflate(R.layout.fragment_search, container, false)
         val url = session?.url.orEmpty()
@@ -85,12 +73,17 @@ class SearchFragment : Fragment(), BackHandler {
             requireComponents.search.provider.getDefaultEngine(requireContext())
         )
 
-        val showSearchSuggestions = if ((activity as HomeActivity).browsingModeManager.mode.isPrivate) {
-            requireContext().settings().shouldShowSearchSuggestions &&
-                    requireContext().settings().shouldShowSearchSuggestionsInPrivate
-        } else {
-            requireContext().settings().shouldShowSearchSuggestions
-        }
+        val isPrivate = (activity as HomeActivity).browsingModeManager.mode.isPrivate
+
+        requireComponents.analytics.metrics.track(Event.InteractWithSearchURLArea)
+
+        val showSearchSuggestions =
+            if (isPrivate) {
+                requireContext().settings().shouldShowSearchSuggestions &&
+                        requireContext().settings().shouldShowSearchSuggestionsInPrivate
+            } else {
+                requireContext().settings().shouldShowSearchSuggestions
+            }
 
         searchStore = StoreProvider.get(this) {
             SearchFragmentStore(
@@ -105,15 +98,18 @@ class SearchFragment : Fragment(), BackHandler {
                     showHistorySuggestions = requireContext().settings().shouldShowHistorySuggestions,
                     showBookmarkSuggestions = requireContext().settings().shouldShowBookmarkSuggestions,
                     session = session,
-                    pastedText = pastedText
+                    pastedText = pastedText,
+                    searchAccessPoint = searchAccessPoint
                 )
             )
         }
 
         val searchController = DefaultSearchController(
-            activity as HomeActivity,
-            searchStore,
-            findNavController()
+            context = activity as HomeActivity,
+            store = searchStore,
+            navController = findNavController(),
+            lifecycleScope = viewLifecycleOwner.lifecycleScope,
+            clearToolbarFocus = ::clearToolbarFocus
         )
 
         searchInteractor = SearchInteractor(
@@ -126,11 +122,21 @@ class SearchFragment : Fragment(), BackHandler {
             view.toolbar_component_wrapper,
             searchInteractor,
             historyStorageProvider(),
-            (activity as HomeActivity).browsingModeManager.mode.isPrivate
+            isPrivate,
+            requireComponents.core.engine
         )
 
+        val urlView = toolbarView.view
+            .findViewById<InlineAutocompleteEditText>(R.id.mozac_browser_toolbar_edit_url_view)
+        urlView?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+
+        requireComponents.core.engine.speculativeCreateSession(isPrivate)
         startPostponedEnterTransition()
         return view
+    }
+
+    private fun clearToolbarFocus() {
+        toolbarView.view.clearFocus()
     }
 
     @ExperimentalCoroutinesApi
@@ -138,8 +144,7 @@ class SearchFragment : Fragment(), BackHandler {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        searchScanButton.visibility = if (context?.hasCamera() == true) View.VISIBLE else View.GONE
-        layoutComponents(view.search_layout)
+        search_scan_button.visibility = if (context?.hasCamera() == true) View.VISIBLE else View.GONE
 
         qrFeature.set(
             QrFeature(
@@ -149,7 +154,7 @@ class SearchFragment : Fragment(), BackHandler {
                     requestPermissions(permissions, REQUEST_CODE_CAMERA_PERMISSIONS)
                 },
                 onScanResult = { result ->
-                    searchScanButton.isChecked = false
+                    search_scan_button.isChecked = false
                     activity?.let {
                         AlertDialog.Builder(it).apply {
                             val spannable = resources.getSpannable(
@@ -183,7 +188,7 @@ class SearchFragment : Fragment(), BackHandler {
             view = view
         )
 
-        view.searchScanButton.setOnClickListener {
+        view.search_scan_button.setOnClickListener {
             toolbarView.view.clearFocus()
             requireComponents.analytics.metrics.track(Event.QRScannerOpened)
             qrFeature.get()?.scan(R.id.container)
@@ -194,7 +199,8 @@ class SearchFragment : Fragment(), BackHandler {
                 (activity as HomeActivity)
                     .openToBrowserAndLoad(
                         searchTermOrURL = SupportUtils.getGenericSumoURLForTopic(
-                            SupportUtils.SumoTopic.SEARCH_SUGGESTION),
+                            SupportUtils.SumoTopic.SEARCH_SUGGESTION
+                        ),
                         newTab = searchStore.state.session == null,
                         from = BrowserDirection.FromSearch
                     )
@@ -204,6 +210,9 @@ class SearchFragment : Fragment(), BackHandler {
                 inflated.visibility = View.GONE
                 context?.settings()?.shouldShowSearchSuggestionsInPrivate = true
                 context?.settings()?.showSearchSuggestionsInPrivateOnboardingFinished = true
+                searchStore.dispatch(SearchFragmentAction.SetShowSearchSuggestions(true))
+                searchStore.dispatch(SearchFragmentAction.AllowSearchSuggestionsInPrivateModePrompt(false))
+                requireComponents.analytics.metrics.track(Event.PrivateBrowsingShowSearchSuggestions)
             }
 
             inflated.dismiss.setOnClickListener {
@@ -211,11 +220,15 @@ class SearchFragment : Fragment(), BackHandler {
                 context?.settings()?.shouldShowSearchSuggestionsInPrivate = false
                 context?.settings()?.showSearchSuggestionsInPrivateOnboardingFinished = true
             }
+
+            inflated.text.text =
+                getString(R.string.search_suggestions_onboarding_text, getString(R.string.app_name))
+
+            inflated.title.text =
+                getString(R.string.search_suggestions_onboarding_title)
         }
 
-        view.search_suggestions_onboarding.setOnInflateListener((stubListener)
-
-        )
+        view.search_suggestions_onboarding.setOnInflateListener((stubListener))
 
         view.toolbar_wrapper.clipToOutline = false
 
@@ -258,10 +271,13 @@ class SearchFragment : Fragment(), BackHandler {
             toolbarView.view.requestFocus()
         }
 
-        updateClipboardSuggestion(searchStore.state, requireContext().components.clipboardHandler.url)
+        updateClipboardSuggestion(
+            searchStore.state,
+            requireContext().components.clipboardHandler.url
+        )
 
         permissionDidUpdate = false
-        (activity as AppCompatActivity).supportActionBar?.hide()
+        hideToolbar()
     }
 
     override fun onPause() {
@@ -270,9 +286,10 @@ class SearchFragment : Fragment(), BackHandler {
     }
 
     override fun onBackPressed(): Boolean {
+        // Note: Actual navigation happens in `handleEditingCancelled` in SearchController
         return when {
             qrFeature.onBackPressed() -> {
-                view?.searchScanButton?.isChecked = false
+                view?.search_scan_button?.isChecked = false
                 toolbarView.view.requestFocus()
             }
             else -> awesomeBarView.isKeyboardDismissedProgrammatically
@@ -287,11 +304,15 @@ class SearchFragment : Fragment(), BackHandler {
     private fun updateClipboardSuggestion(searchState: SearchFragmentState, clipboardUrl: String?) {
         val visibility =
             if (searchState.showClipboardSuggestions && searchState.query.isEmpty() && !clipboardUrl.isNullOrEmpty())
-            View.VISIBLE else View.GONE
+                View.VISIBLE else View.GONE
 
         fill_link_from_clipboard.visibility = visibility
         divider_line.visibility = visibility
         clipboard_url.text = clipboardUrl
+
+        if (clipboardUrl != null && !((activity as HomeActivity).browsingModeManager.mode.isPrivate)) {
+            requireComponents.core.engine.speculativeConnect(clipboardUrl)
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -307,7 +328,7 @@ class SearchFragment : Fragment(), BackHandler {
                     if (context.isPermissionGranted(Manifest.permission.CAMERA)) {
                         permissionDidUpdate = true
                     } else {
-                        view?.searchScanButton?.isChecked = false
+                        view?.search_scan_button?.isChecked = false
                     }
                 }
             }
@@ -322,12 +343,16 @@ class SearchFragment : Fragment(), BackHandler {
     }
 
     private fun updateSearchSuggestionsHintVisibility(state: SearchFragmentState) {
-        view?.findViewById<View>(R.id.search_suggestions_onboarding)
-            ?.isVisible = state.showSearchSuggestionsHint
+        view?.apply {
+            findViewById<View>(R.id.search_suggestions_onboarding)?.isVisible = state.showSearchSuggestionsHint
+
+            search_suggestions_onboarding_divider?.isVisible =
+                search_with_shortcuts.isVisible && state.showSearchSuggestionsHint
+        }
     }
 
     companion object {
-        private const val SHARED_TRANSITION_MS = 200L
+        private const val SHARED_TRANSITION_MS = 250L
         private const val REQUEST_CODE_CAMERA_PERMISSIONS = 1
     }
 }

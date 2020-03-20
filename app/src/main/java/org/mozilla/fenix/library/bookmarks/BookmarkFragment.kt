@@ -11,7 +11,6 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -29,15 +28,17 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mozilla.appservices.places.BookmarkRoot
+import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.concept.storage.BookmarkNode
 import mozilla.components.concept.storage.BookmarkNodeType
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.lib.state.ext.consumeFrom
-import mozilla.components.support.base.feature.BackHandler
+import mozilla.components.support.base.feature.UserInteractionHandler
+import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
-import org.mozilla.fenix.components.FenixSnackbarPresenter
+import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.StoreProvider
 import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.bookmarkStorage
@@ -46,11 +47,10 @@ import org.mozilla.fenix.ext.minus
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.toShortUrl
 import org.mozilla.fenix.library.LibraryPageFragment
-import org.mozilla.fenix.share.ShareTab
 import org.mozilla.fenix.utils.allowUndo
 
 @Suppress("TooManyFunctions", "LargeClass")
-class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), BackHandler {
+class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), UserInteractionHandler {
 
     private lateinit var bookmarkStore: BookmarkFragmentStore
     private lateinit var bookmarkView: BookmarkView
@@ -81,13 +81,14 @@ class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), BackHandler {
         bookmarkStore = StoreProvider.get(this) {
             BookmarkFragmentStore(BookmarkFragmentState(null))
         }
+
         bookmarkInteractor = BookmarkFragmentInteractor(
             bookmarkStore = bookmarkStore,
             viewModel = sharedViewModel,
             bookmarksController = DefaultBookmarkController(
                 context = context!!,
                 navController = findNavController(),
-                snackbarPresenter = FenixSnackbarPresenter(view),
+                snackbar = FenixSnackbar.make(view, FenixSnackbar.LENGTH_LONG),
                 deleteBookmarkNodes = ::deleteMulti,
                 invokePendingDeletion = ::invokePendingDeletion
             ),
@@ -126,7 +127,7 @@ class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), BackHandler {
     override fun onResume() {
         super.onResume()
 
-        (activity as? AppCompatActivity)?.supportActionBar?.show()
+        (activity as HomeActivity).getSupportActionBarAndInflateIfNecessary().show()
         context?.components?.backgroundServices?.accountManager?.let { accountManager ->
             sharedViewModel.observeAccountManager(accountManager, owner = this)
             accountManager.register(refreshOnSignInListener, owner = this)
@@ -154,8 +155,10 @@ class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), BackHandler {
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         when (val mode = bookmarkStore.state.mode) {
-            BookmarkFragmentState.Mode.Normal -> {
-                inflater.inflate(R.menu.bookmarks_menu, menu)
+            is BookmarkFragmentState.Mode.Normal -> {
+                if (mode.showMenu) {
+                    inflater.inflate(R.menu.bookmarks_menu, menu)
+                }
             }
             is BookmarkFragmentState.Mode.Selecting -> {
                 if (mode.selectedItems.any { it.type != BookmarkNodeType.ITEM }) {
@@ -196,9 +199,7 @@ class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), BackHandler {
                 val bookmark = bookmarkStore.state.mode.selectedItems.first()
                 navigate(
                     BookmarkFragmentDirections.actionBookmarkFragmentToShareFragment(
-                        url = bookmark.url,
-                        title = bookmark.title,
-                        tabs = arrayOf(ShareTab(bookmark.url.orEmpty(), bookmark.title.orEmpty()))
+                        data = arrayOf(ShareData(url = bookmark.url, title = bookmark.title))
                     )
                 )
                 true
@@ -256,7 +257,7 @@ class BookmarkFragment : LibraryPageFragment<BookmarkNode>(), BackHandler {
         bookmarkInteractor.onBookmarksChanged(bookmarkTree)
 
         val deleteOperation: (suspend () -> Unit) = {
-            deleteSelectedBookmarks(selected)
+            deleteSelectedBookmarks(pendingBookmarksToDelete)
             pendingBookmarkDeletionJob = null
             // Since this runs in a coroutine, we can't depend upon the fragment still being attached
             metrics?.track(Event.RemoveBookmarks)

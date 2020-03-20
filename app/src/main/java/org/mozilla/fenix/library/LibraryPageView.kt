@@ -10,9 +10,9 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.extensions.LayoutContainer
+import mozilla.components.support.ktx.android.content.getColorFromAttr
 import org.mozilla.fenix.R
 import org.mozilla.fenix.ext.asActivity
-import org.mozilla.fenix.ext.getColorFromAttr
 import org.mozilla.fenix.ext.setToolbarColors
 
 open class LibraryPageView(
@@ -30,8 +30,7 @@ open class LibraryPageView(
             foregroundColor = context.getColorFromAttr(R.attr.primaryText),
             backgroundColor = context.getColorFromAttr(R.attr.foundation)
         )
-        libraryItemsList.setItemViewCacheSize(0)
-        libraryItemsList.adapter?.notifyItemRangeChanged(0, libraryItemsList.childCount)
+        libraryItemsList.adapter?.notifyDataSetChanged()
     }
 
     protected fun setUiForSelectingMode(
@@ -43,8 +42,7 @@ open class LibraryPageView(
             foregroundColor = ContextCompat.getColor(context, R.color.white_color),
             backgroundColor = context.getColorFromAttr(R.attr.accentHighContrast)
         )
-        libraryItemsList.setItemViewCacheSize(0)
-        libraryItemsList.adapter?.notifyItemRangeChanged(0, libraryItemsList.childCount)
+        libraryItemsList.adapter?.notifyDataSetChanged()
     }
 
     private fun updateToolbar(title: String?, foregroundColor: Int, backgroundColor: Int) {

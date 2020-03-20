@@ -26,7 +26,14 @@ import org.mozilla.fenix.ext.metrics
 import org.mozilla.fenix.ext.sessionsOfType
 
 /**
- * As long as a session is active this service will keep the notification (and our process) alive.
+ * Manages notifications for private tabs.
+ *
+ * Private tab notifications solve two problems for us:
+ * 1 - They allow users to interact with us from outside of the app (example: by closing all
+ * private tabs).
+ * 2 - The notification will keep our process alive, allowing us to keep private tabs in memory.
+ *
+ * As long as a session is active this service will keep its notification alive.
  */
 class SessionNotificationService : Service() {
 
@@ -69,27 +76,13 @@ class SessionNotificationService : Service() {
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setOngoing(true)
             .setSmallIcon(R.drawable.ic_pbm_notification)
-            .setContentTitle(getString(R.string.app_name_private_2))
-            .setContentText(getString(R.string.notification_pbm_delete_text))
+            .setContentTitle(getString(R.string.app_name_private_3))
+            .setContentText(getString(R.string.notification_pbm_delete_text_2))
             .setContentIntent(createNotificationIntent())
             .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setShowWhen(false)
             .setLocalOnly(true)
             .setColor(ContextCompat.getColor(this, R.color.pbm_notification_color))
-            .addAction(
-                NotificationCompat.Action(
-                    0,
-                    getString(R.string.notification_pbm_action_open),
-                    createOpenActionIntent()
-                )
-            )
-            .addAction(
-                NotificationCompat.Action(
-                    0,
-                    getString(R.string.notification_pbm_action_delete_and_open),
-                    createOpenAndEraseActionIntent()
-                )
-            )
             .build()
     }
 
@@ -98,23 +91,6 @@ class SessionNotificationService : Service() {
         intent.action = ACTION_ERASE
 
         return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_ONE_SHOT)
-    }
-
-    private fun createOpenActionIntent(): PendingIntent {
-        val intent = Intent(this, HomeActivity::class.java)
-        intent.putExtra(HomeActivity.EXTRA_OPENED_FROM_NOTIFICATION, true)
-        intent.putExtra(HomeActivity.PRIVATE_BROWSING_MODE, true)
-
-        return PendingIntent.getActivity(this, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT)
-    }
-
-    private fun createOpenAndEraseActionIntent(): PendingIntent {
-        val intent = Intent(this, HomeActivity::class.java)
-
-        intent.putExtra(HomeActivity.EXTRA_DELETE_PRIVATE_TABS, true)
-        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-
-        return PendingIntent.getActivity(this, 2, intent, PendingIntent.FLAG_CANCEL_CURRENT)
     }
 
     private fun createNotificationChannelIfNeeded() {

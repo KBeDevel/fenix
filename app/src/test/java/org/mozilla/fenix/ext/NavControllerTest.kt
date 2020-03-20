@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.fenix.ext
 
 import android.os.Bundle
@@ -18,7 +22,6 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestApplication::class)
-
 class NavControllerTest {
 
     private val navController: NavController = mockk(relaxed = true)
@@ -38,7 +41,7 @@ class NavControllerTest {
     fun `Nav with id and directions args`() {
         navController.nav(4, navDirections)
         verify { (navController.currentDestination) }
-        verify { (navController.navigate(navDirections)) }
+        verify { (navController.navigate(navDirections, null)) }
     }
 
     @Test

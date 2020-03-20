@@ -26,18 +26,30 @@ class ShareToAppsView(
 ) : LayoutContainer {
 
     private val adapter = AppShareAdapter(interactor)
+    private val recentAdapter = AppShareAdapter(interactor)
 
     init {
         LayoutInflater.from(containerView.context)
             .inflate(R.layout.share_to_apps, containerView, true)
 
         appsList.adapter = adapter
+        recentAppsList.adapter = recentAdapter
     }
 
     fun setShareTargets(targets: List<AppShareOption>) {
         progressBar.visibility = View.GONE
-        appsList.visibility = View.VISIBLE
 
+        appsList.visibility = View.VISIBLE
         adapter.submitList(targets)
+    }
+
+    fun setRecentShareTargets(recentTargets: List<AppShareOption>) {
+        if (recentTargets.isEmpty()) {
+            return
+        }
+        progressBar.visibility = View.GONE
+
+        recentAppsContainer.visibility = View.VISIBLE
+        recentAdapter.submitList(recentTargets)
     }
 }

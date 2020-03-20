@@ -13,14 +13,17 @@ import com.adjust.sdk.AdjustConfig
 import com.adjust.sdk.LogLevel
 import org.mozilla.fenix.BuildConfig
 import org.mozilla.fenix.Config
+import org.mozilla.fenix.ReleaseChannel
 import org.mozilla.fenix.ext.settings
 
 class AdjustMetricsService(private val application: Application) : MetricsService {
+    override val type = MetricServiceType.Marketing
+
     override fun start() {
-        if ((BuildConfig.ADJUST_TOKEN.isNullOrEmpty())) {
+        if ((BuildConfig.ADJUST_TOKEN.isNullOrBlank())) {
             Log.i(LOGTAG, "No adjust token defined")
 
-            if (Config.channel.isReleased) {
+            if (Config.channel.isReleased && Config.channel != ReleaseChannel.FennecNightly) {
                 throw IllegalStateException("No adjust token defined for release build")
             }
 
@@ -35,9 +38,24 @@ class AdjustMetricsService(private val application: Application) : MetricsServic
         )
 
         config.setOnAttributionChangedListener {
-            it.campaign?.let { campaign ->
-                application.applicationContext.settings().adjustCampaignId = campaign
+            if (!it.network.isNullOrEmpty()) {
+                application.applicationContext.settings().adjustNetwork =
+                    it.network
             }
+            if (!it.adgroup.isNullOrEmpty()) {
+                application.applicationContext.settings().adjustAdGroup =
+                    it.adgroup
+            }
+            if (!it.creative.isNullOrEmpty()) {
+                application.applicationContext.settings().adjustCreative =
+                    it.creative
+            }
+            if (!it.campaign.isNullOrEmpty()) {
+                application.applicationContext.settings().adjustCampaignId =
+                    it.campaign
+            }
+
+            InstallationPing(application).checkAndSend()
         }
 
         config.setLogLevel(LogLevel.SUPRESS)

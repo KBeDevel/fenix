@@ -19,14 +19,14 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.RadioButton
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import mozilla.components.feature.sitepermissions.SitePermissionsRules
+import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action.ALLOWED
 import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action.ASK_TO_ALLOW
 import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action.BLOCKED
 import org.mozilla.fenix.R
-import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.showToolbar
 import org.mozilla.fenix.settings.PhoneFeature
 import org.mozilla.fenix.settings.initBlockedByAndroidView
 import org.mozilla.fenix.settings.setStartCheckedIndicator
@@ -45,8 +45,7 @@ class SitePermissionsManagePhoneFeatureFragment : Fragment() {
             .fromBundle(requireArguments())
             .permission.toPhoneFeature()
 
-        (activity as AppCompatActivity).title = phoneFeature.getLabel(requireContext())
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(phoneFeature.getLabel(requireContext()))
         settings = requireContext().settings()
     }
 
@@ -76,7 +75,8 @@ class SitePermissionsManagePhoneFeatureFragment : Fragment() {
     private fun initFirstRadio(rootView: View) {
         val radio = rootView.findViewById<RadioButton>(R.id.ask_to_allow_radio)
         val askToAllowText = when (phoneFeature) {
-            PhoneFeature.AUTOPLAY -> getString(R.string.preference_option_autoplay_blocked)
+            PhoneFeature.AUTOPLAY_AUDIBLE ->
+                getString(R.string.preference_option_autoplay_blocked)
             else -> getString(R.string.preference_option_phone_feature_ask_to_allow)
         }
         val recommendedText = getString(R.string.phone_feature_recommended)
@@ -103,14 +103,9 @@ class SitePermissionsManagePhoneFeatureFragment : Fragment() {
             append(recommendedSpannable)
             this
         }
-        val expectedAction = if (phoneFeature == PhoneFeature.AUTOPLAY) BLOCKED else ASK_TO_ALLOW
+        val expectedAction = if (phoneFeature == PhoneFeature.AUTOPLAY_AUDIBLE) BLOCKED else ASK_TO_ALLOW
         radio.setOnClickListener {
-            if (phoneFeature == PhoneFeature.AUTOPLAY) {
-                settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.AUTOPLAY, expectedAction)
-                requireComponents.core.engine.settings.allowAutoplayMedia = false
-            } else {
-                saveActionInSettings(expectedAction)
-            }
+            saveActionInSettings(expectedAction)
         }
         radio.restoreState(expectedAction)
     }
@@ -125,17 +120,13 @@ class SitePermissionsManagePhoneFeatureFragment : Fragment() {
     private fun initSecondRadio(rootView: View) {
         val radio = rootView.findViewById<RadioButton>(R.id.block_radio)
         radio.text = when (phoneFeature) {
-            PhoneFeature.AUTOPLAY -> getString(R.string.preference_option_autoplay_allowed)
+            PhoneFeature.AUTOPLAY_AUDIBLE, PhoneFeature.AUTOPLAY_INAUDIBLE ->
+                getString(R.string.preference_option_autoplay_allowed)
             else -> getString(R.string.preference_option_phone_feature_blocked)
         }
-        val expectedAction = if (phoneFeature == PhoneFeature.AUTOPLAY) ASK_TO_ALLOW else BLOCKED
+        val expectedAction = if (phoneFeature == PhoneFeature.AUTOPLAY_AUDIBLE) ALLOWED else BLOCKED
         radio.setOnClickListener {
-            if (phoneFeature == PhoneFeature.AUTOPLAY) {
-                settings.setSitePermissionsPhoneFeatureAction(PhoneFeature.AUTOPLAY, expectedAction)
-                requireComponents.core.engine.settings.allowAutoplayMedia = true
-            } else {
-                saveActionInSettings(expectedAction)
-            }
+            saveActionInSettings(expectedAction)
         }
         radio.restoreState(expectedAction)
     }

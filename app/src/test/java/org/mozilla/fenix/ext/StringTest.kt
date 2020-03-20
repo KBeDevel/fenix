@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 package org.mozilla.fenix.ext
 
 import assertk.assertThat
@@ -186,8 +190,8 @@ class StringTest {
     }
 
     @Test
-    fun `should return not the protocol for file`() {
-        "file:///foo/bar.txt" shortenedShouldBecome "/foo/bar.txt"
+    fun `file uri should return input`() {
+        "file:///foo/bar.txt" shortenedShouldBecome "file:///foo/bar.txt"
     }
 
     @Test

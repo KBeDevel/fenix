@@ -4,16 +4,20 @@
 
 package org.mozilla.fenix.search
 
+import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.navigation.NavController
 import androidx.navigation.NavDirections
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runBlockingTest
 import mozilla.components.browser.search.SearchEngine
 import mozilla.components.browser.session.Session
 import mozilla.components.browser.session.SessionManager
 import mozilla.components.support.test.robolectric.testContext
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
@@ -26,13 +30,14 @@ import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.components.metrics.MetricController
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.metrics
-import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.searchEngineManager
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.search.DefaultSearchController.Companion.KEYBOARD_ANIMATION_DELAY
 import org.mozilla.fenix.utils.Settings
 import org.mozilla.fenix.whatsnew.clear
 import org.robolectric.annotation.Config
 
+@ExperimentalCoroutinesApi
 @RunWith(AndroidJUnit4::class)
 @Config(application = TestApplication::class)
 class DefaultSearchControllerTest {
@@ -45,6 +50,8 @@ class DefaultSearchControllerTest {
     private val searchEngine: SearchEngine = mockk(relaxed = true)
     private val metrics: MetricController = mockk(relaxed = true)
     private val sessionManager: SessionManager = mockk(relaxed = true)
+    private val lifecycleScope: LifecycleCoroutineScope = mockk(relaxed = true)
+    private val clearToolbarFocus: (() -> Unit) = mockk(relaxed = true)
 
     private lateinit var controller: DefaultSearchController
     private lateinit var settings: Settings
@@ -60,7 +67,9 @@ class DefaultSearchControllerTest {
         controller = DefaultSearchController(
             context = context,
             store = store,
-            navController = navController
+            navController = navController,
+            lifecycleScope = lifecycleScope,
+            clearToolbarFocus = clearToolbarFocus
         )
 
         settings = testContext.settings().apply { testContext.settings().clear() }
@@ -72,20 +81,35 @@ class DefaultSearchControllerTest {
 
         controller.handleUrlCommitted(url)
 
-        verify { context.openToBrowserAndLoad(
-            searchTermOrURL = url,
-            newTab = session == null,
-            from = BrowserDirection.FromSearch,
-            engine = searchEngine
-        ) }
+        verify {
+            context.openToBrowserAndLoad(
+                searchTermOrURL = url,
+                newTab = session == null,
+                from = BrowserDirection.FromSearch,
+                engine = searchEngine
+            )
+        }
         verify { metrics.track(Event.EnteredUrl(false)) }
     }
 
     @Test
-    fun handleEditingCancelled() {
+    fun handleEditingCancelled() = runBlockingTest {
+        controller = DefaultSearchController(
+            context = context,
+            store = store,
+            navController = navController,
+            lifecycleScope = this,
+            clearToolbarFocus = clearToolbarFocus
+        )
+
         controller.handleEditingCancelled()
 
-        verify { navController.navigateUp() }
+        advanceTimeBy(KEYBOARD_ANIMATION_DELAY)
+
+        verify {
+            clearToolbarFocus()
+            navController.popBackStack()
+        }
     }
 
     @Test
@@ -116,6 +140,18 @@ class DefaultSearchControllerTest {
     }
 
     @Test
+    fun `show search shortcuts when setting enabled AND query equals url`() {
+        val text = "mozilla.org"
+        every { session?.url } returns "mozilla.org"
+
+        assertEquals(text, session?.url)
+
+        controller.handleTextChanged(text)
+
+        verify { store.dispatch(SearchFragmentAction.ShowSearchShortcutEnginePicker(true)) }
+    }
+
+    @Test
     fun `do not show search shortcuts when setting enabled AND query non-empty`() {
         val text = "mozilla"
 
@@ -125,7 +161,7 @@ class DefaultSearchControllerTest {
     }
 
     @Test
-    fun `do not show search shortcuts when setting disabled AND query empty`() {
+    fun `do not show search shortcuts when setting disabled AND query empty AND url not matching query`() {
         testContext.settings().preferences
             .edit()
             .putBoolean(testContext.getString(R.string.pref_key_show_search_shortcuts), false)
@@ -162,11 +198,13 @@ class DefaultSearchControllerTest {
 
         controller.handleUrlTapped(url)
 
-        verify { context.openToBrowserAndLoad(
-            searchTermOrURL = url,
-            newTab = session == null,
-            from = BrowserDirection.FromSearch
-        ) }
+        verify {
+            context.openToBrowserAndLoad(
+                searchTermOrURL = url,
+                newTab = session == null,
+                from = BrowserDirection.FromSearch
+            )
+        }
         verify { metrics.track(Event.EnteredUrl(false)) }
     }
 
@@ -176,13 +214,15 @@ class DefaultSearchControllerTest {
 
         controller.handleSearchTermsTapped(searchTerms)
 
-        verify { context.openToBrowserAndLoad(
-            searchTermOrURL = searchTerms,
-            newTab = session == null,
-            from = BrowserDirection.FromSearch,
-            engine = searchEngine,
-            forceSearch = true
-        ) }
+        verify {
+            context.openToBrowserAndLoad(
+                searchTermOrURL = searchTerms,
+                newTab = session == null,
+                from = BrowserDirection.FromSearch,
+                engine = searchEngine,
+                forceSearch = true
+            )
+        }
     }
 
     @Test
@@ -192,12 +232,13 @@ class DefaultSearchControllerTest {
         controller.handleSearchShortcutEngineSelected(searchEngine)
 
         verify { store.dispatch(SearchFragmentAction.SearchShortcutEngineSelected(searchEngine)) }
-        verify { metrics.track(Event.SearchShortcutSelected(searchEngine.name)) }
+        verify { metrics.track(Event.SearchShortcutSelected(searchEngine, false)) }
     }
 
     @Test
     fun handleClickSearchEngineSettings() {
-        val directions: NavDirections = SearchFragmentDirections.actionSearchFragmentToSearchEngineFragment()
+        val directions: NavDirections =
+            SearchFragmentDirections.actionSearchFragmentToSearchEngineFragment()
 
         controller.handleClickSearchEngineSettings()
 
@@ -225,11 +266,10 @@ class DefaultSearchControllerTest {
     @Test
     fun handleExistingSessionSelected() {
         val session: Session = mockk(relaxed = true)
-        val directions = SearchFragmentDirections.actionSearchFragmentToBrowserFragment(null)
 
         controller.handleExistingSessionSelected(session)
 
-        verify { navController.nav(R.id.searchFragment, directions) }
         verify { sessionManager.select(session) }
+        verify { context.openToBrowser(from = BrowserDirection.FromSearch) }
     }
 }

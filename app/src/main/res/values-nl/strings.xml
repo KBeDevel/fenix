@@ -4,6 +4,8 @@
     <!-- App name for private browsing mode, only the "Private" portion should be localized. -->
     <string name="app_name_private_2">Privé Firefox Preview</string>
 
+    <!-- App name for private browsing mode, only the "Private" portion should be localized. -->
+    <string name="app_name_private_3">Firefox Preview (Privé)</string>
     <!-- Home Fragment -->
     <!-- Content description (not visible, for screen readers etc.): "Three dot" menu button. -->
     <string name="content_description_menu">Meer opties</string>
@@ -25,11 +27,8 @@
     <string name="private_browsing_title">U bevindt zich in een privésessie</string>
     <!-- Explanation for private browsing displayed to users on home view when they first enable private mode
         The first parameter is the name of the app defined in app_name (for example: Fenix) -->
-    <string name="private_browsing_placeholder_description">
-         %1$s wist uw zoek- en browsergeschiedenis zodra u de toepassing afsluit of alle privétabbladen sluit. Hoewel privénavigatie u niet anoniem maakt voor websites of uw internetprovider, maakt dit het
-        makkelijker om wat u online doet privé te houden ten opzichte van anderen die dit apparaat gebruiken.
-    
-    </string>
+    <string name="private_browsing_placeholder_description">%1$s wist uw zoek- en browsergeschiedenis zodra u de toepassing afsluit of alle privétabbladen sluit. Hoewel privénavigatie u niet anoniem maakt voor websites of uw internetprovider, maakt dit het
+        makkelijker om wat u online doet privé te houden ten opzichte van anderen die dit apparaat gebruiken.</string>
     <string name="private_browsing_common_myths">
        
        Veelgehoorde mythes over privénavigatie
@@ -67,6 +66,10 @@
     <string name="browser_menu_bookmark">Bladwijzer maken</string>
     <!-- Content description (not visible, for screen readers etc.): Un-bookmark the current page -->
     <string name="browser_menu_edit_bookmark">Bladwijzer bewerken</string>
+    <!-- Browser menu button that opens the addon manager -->
+    <string name="browser_menu_addon_manager">Add-onbeheerder</string>
+    <!-- Text displayed when there are no add-ons to be shown -->
+    <string name="no_add_ons">Geen add-ons hier</string>
     <!-- Browser menu button that sends a user to help articles -->
     <string name="browser_menu_help">Help</string>
     <!-- Browser menu button that sends a to a the what's new article -->
@@ -79,6 +82,8 @@
     <string name="browser_menu_desktop_site">Desktopwebsite</string>
     <!-- Browser menu toggle that adds a shortcut to the site on the device home screen. -->
     <string name="browser_menu_add_to_homescreen">Toevoegen aan startscherm</string>
+    <!-- Browser menu toggle that installs a Progressive Web App shortcut to the site on the device home screen. -->
+    <string name="browser_menu_install_on_homescreen">Installeren</string>
     <!-- Browser menu button that opens the find in page menu -->
     <string name="browser_menu_find_in_page">Zoeken op pagina</string>
     <!-- Browser menu button that creates a private tab -->
@@ -111,6 +116,16 @@
     <!-- Browser menu button to configure reader mode appearance e.g. the used font type and size -->
     <string name="browser_menu_read_appearance">Vormgeving</string>
 
+    <!-- Locale Settings Fragment -->
+    <!-- Content description for tick mark on selected language -->
+    <string name="a11y_selected_locale_content_description">Geselecteerde taal</string>
+    <!-- Content description for search icon -->
+    <string name="a11y_search_icon_content_description">Zoeken</string>
+    <!-- Text for default locale item -->
+    <string name="default_locale_text">Taal apparaat volgen</string>
+    <!-- Placeholder text shown in the search bar before a user enters text -->
+    <string name="locale_search_hint">Taal zoeken</string>
+
     <!-- Search Fragment -->
     <!-- Button in the search view that lets a user search by scanning a QR code -->
     <string name="search_scan_button">Scannen</string>
@@ -118,10 +133,23 @@
     <string name="search_shortcuts_button">Snelkoppelingen</string>
     <!-- Button in the search view when shortcuts are displayed that takes a user to the search engine settings -->
     <string name="search_shortcuts_engine_settings">Instellingen zoekmachine</string>
-    <!-- Header displayed when selecting a shortcut search engine -->
+    <!-- DEPRECATED: Header displayed when selecting a shortcut search engine -->
     <string name="search_shortcuts_search_with">Zoeken met</string>
+    <!-- Header displayed when selecting a shortcut search engine -->
+    <string name="search_shortcuts_search_with_2">Deze keer zoeken met:</string>
     <!-- Button in the search view that lets a user navigate to the site in their clipboard -->
     <string name="awesomebar_clipboard_title">Koppeling vanaf klembord invullen</string>
+
+    <!-- Button in the search suggestions onboarding that allows search suggestions in private sessions -->
+    <string name="search_suggestions_onboarding_allow_button">Toestaan</string>
+    <!-- Button in the search suggestions onboarding that does not allow search suggestions in private sessions -->
+    <string name="search_suggestions_onboarding_do_not_allow_button">Niet toestaan</string>
+    <!-- Search suggestion onboarding hint title text -->
+    <string name="search_suggestions_onboarding_title">Zoeksuggesties toestaan in privésessies?</string>
+    <!-- Search suggestion onboarding hint description text, first parameter is the name of the app defined in app_name (for example: Fenix)-->
+    <string name="search_suggestions_onboarding_text">%s zal alles wat u in de adresbalk intypt met uw standaardzoekmachine delen.</string>
+    <!-- Search suggestion onboarding hint Learn more link text -->
+    <string name="search_suggestions_onboarding_learn_more_link">Meer info</string>
 
     <!-- Search Widget -->
     <!-- Text preview for smaller sized widgets -->
@@ -134,12 +162,16 @@
     <string name="settings">Instellingen</string>
     <!-- Preference category for basic settings -->
     <string name="preferences_category_basics">Basisinstellingen</string>
+    <!-- Preference category for general settings -->
+    <string name="preferences_category_general">Algemeen</string>
     <!-- Preference category for all links about Fenix -->
     <string name="preferences_category_about">Over</string>
     <!-- Preference for settings related to changing the default search engine -->
     <string name="preferences_default_search_engine">Standaardzoekmachine</string>
     <!-- Preference for settings related to Search -->
     <string name="preferences_search">Zoeken</string>
+    <!-- Preference for settings related to Search address bar -->
+    <string name="preferences_search_address_bar">Adresbalk</string>
     <!-- Preference linking to help about Fenix -->
     <string name="preferences_help">Help</string>
     <!-- Preference link to rating Fenix on the Play Store -->
@@ -161,8 +193,12 @@
     <string name="preferences_category_advanced">Geavanceerd</string>
     <!-- Preference category for privacy settings -->
     <string name="preferences_category_privacy">Privacy</string>
+    <!-- Preference category for privacy and security settings -->
+    <string name="preferences_category_privacy_security">Privacy en beveiliging</string>
     <!-- Preference for advanced site permissions -->
     <string name="preferences_site_permissions">Websitemachtigingen</string>
+    <!-- Preference for private browsing options -->
+    <string name="preferences_private_browsing_options">Privénavigatie</string>
     <!-- Preference for opening links in a private tab-->
     <string name="preferences_open_links_in_a_private_tab">Koppelingen openen in een privétabblad</string>
     <!-- Preference for adding private browsing shortcut -->
@@ -173,8 +209,12 @@
     <string name="preferences_category_account">Account</string>
     <!-- Preference shown on banner to sign into account -->
     <string name="preferences_sign_in">Aanmelden</string>
+    <!-- Preference for changing where the toolbar is positioned -->
+    <string name="preferences_toolbar">Werkbalk</string>
     <!-- Preference for changing default theme to dark or light mode -->
     <string name="preferences_theme">Thema</string>
+    <!-- Preference for settings related to visual options -->
+    <string name="preferences_customize">Aanpassen</string>
     <!-- Preference description for banner about signing in -->
     <string name="preferences_sign_in_description">Synchroniseer bladwijzers, geschiedenis en meer met uw Firefox-account</string>
     <!-- Preference shown instead of account display name while account profile information isn't available yet. -->
@@ -197,6 +237,8 @@
     <string name="preferences_show_search_shortcuts">Zoeksnelkoppelingen tonen</string>
     <!-- Preference title for switch preference to show search suggestions -->
     <string name="preferences_show_search_suggestions">Zoeksuggesties tonen</string>
+    <!-- Preference title for switch preference to show search suggestions also in private mode -->
+    <string name="preferences_show_search_suggestions_in_private">Tonen in privésessies</string>
     <!-- Preference title for switch preference to show a clipboard suggestion when searching -->
     <string name="preferences_show_clipboard_suggestions">Klembordsuggesties tonen</string>
     <!-- Preference title for switch preference to suggest browsing history when searching -->
@@ -205,6 +247,12 @@
     <string name="preferences_search_bookmarks">Bladwijzers doorzoeken</string>
     <!-- Preference for account settings -->
     <string name="preferences_account_settings">Accountinstellingen</string>
+
+    <!-- Preference for open links in third party apps -->
+    <string name="preferences_open_links_in_apps">Koppelingen openen in apps</string>
+
+    <!-- Preference for add_ons -->
+    <string name="preferences_addons">Add-ons</string>
 
     <!-- Account Preferences -->
     <!-- Preference for triggering sync -->
@@ -278,6 +326,10 @@
     <string name="preference_usage_data">Gebruiks- en technische gegevens</string>
     <!-- Preference description for usage and technical data collection -->
     <string name="preferences_usage_data_description">Deelt gegevens over prestaties, gebruik, hardware en aanpassingen van uw browser met Mozilla om %1$s te helpen verbeteren</string>
+    <!-- Preference switch for marketing data collection -->
+    <string name="preferences_marketing_data">Marketinggegevens</string>
+    <!-- Preference description for marketing data collection, parameter is the app name (e.g. Firefox) -->
+    <string name="preferences_marketing_data_description">Deelt gegevens over welke functies u in %1$s gebruikt met Leanplum, onze leverancier van mobiele marketing.</string>
     <!-- Title for experiments preferences -->
     <string name="preference_experiments">Experimenten</string>
     <!-- Summary for experiments preferences -->
@@ -308,6 +360,12 @@
     <string name="pair_open_camera">Camera openen</string>
     <!-- Button to cancel pairing -->
     <string name="pair_cancel">Annuleren</string>
+
+    <!-- Toolbar Preferences -->
+    <!-- Preference for using top toolbar -->
+    <string name="preference_top_toolbar">Boven</string>
+    <!-- Preference for using bottom toolbar -->
+    <string name="preference_bottom_toolbar">Onder</string>
 
     <!-- Theme Preferences -->
     <!-- Preference for using light theme -->
@@ -358,6 +416,8 @@
     <string name="tab_header_label">Open tabbladen</string>
     <!-- Title for the list of tabs in the current private session -->
     <string name="tabs_header_private_title">Privésessie</string>
+    <!-- Title for the list of tabs in the current private session -->
+    <string name="tabs_header_private_tabs_title">Privétabbladen</string>
     <!-- Content description (not visible, for screen readers etc.): Add tab button. Adds a news tab when pressed -->
     <string name="add_tab">Tabblad toevoegen</string>
     <!-- Content description (not visible, for screen readers etc.): Close tab button. Closes the current session when pressed -->
@@ -393,6 +453,9 @@
     <!-- Text for the button to open tabs of the selected collection -->
     <string name="collection_open_tabs">Tabbladen openen</string>
 
+
+    <!-- Text for the menu button to remove a top site -->
+    <string name="remove_top_site">Verwijderen</string>
 
     <!-- History -->
     <!-- Text for the button to clear all history -->
@@ -467,6 +530,8 @@
     <string name="bookmark_menu_open_in_private_tab_button">Openen in privétabblad</string>
     <!-- Bookmark overflow menu delete button -->
     <string name="bookmark_menu_delete_button">Verwijderen</string>
+    <!--Bookmark overflow menu save button -->
+    <string name="bookmark_menu_save_button">Opslaan</string>
     <!-- Bookmark multi select title in app bar
      The first parameter is the number of bookmarks selected -->
     <string name="bookmarks_multi_select_title">%1$d geselecteerd</string>
@@ -544,11 +609,19 @@
     <!-- Summary of tracking protection preference if tracking protection is set to off -->
     <string name="tracking_protection_off">Uit</string>
 
-    <!-- Label that indicates video and audio autoplay is blocked -->
+    <!-- DEPRECATED: Label that indicates video and audio autoplay is blocked -->
     <string name="preference_option_autoplay_blocked">Video en audio geblokkeerd</string>
-    <!-- Label that indicates video and audio autoplay is allowed -->
+    <!-- DEPRECATED: Label that indicates video and audio autoplay is allowed -->
     <string name="preference_option_autoplay_allowed">Video en audio toegestaan</string>
 
+    <!-- Label that indicates that all video and audio autoplay is allowed -->
+    <string name="preference_option_autoplay_allowed2">Audio en video toestaan</string>
+    <!-- Label that indicates that video and audio autoplay is only allowed over WIFI -->
+    <string name="preference_option_autoplay_allowed_wifi_only">Audio en video alleen op wifi toestaan</string>
+    <!-- Label that indicates that video autoplay is allowed, but audio autoplay is blocked -->
+    <string name="preference_option_autoplay_block_audio">Audio blokkeren</string>
+    <!-- Label that indicates that all video and audio autoplay is blocked -->
+    <string name="preference_option_autoplay_blocked2">Video en audio blokkeren</string>
     <!-- Summary of delete browsing data on quit preference if it is set to on -->
     <string name="delete_browsing_data_quit_on">Aan</string>
     <!-- Summary of delete browsing data on quit preference if it is set to off -->
@@ -609,6 +682,10 @@
     <string name="share_link_subheader">Een koppeling delen</string>
     <!-- Sub-header in the dialog to share a link to another sync device -->
     <string name="share_device_subheader">Verzenden naar apparaat</string>
+    <!-- Sub-header in the dialog to share a link to an app from the full list -->
+    <string name="share_link_all_apps_subheader">Alle acties</string>
+    <!-- Sub-header in the dialog to share a link to an app from the most-recent sorted list -->
+    <string name="share_link_recent_apps_subheader">Onlangs gebruikt</string>
     <!-- An option from the share dialog to sign into sync -->
     <string name="sync_sign_in">Aanmelden bij Sync</string>
     <!-- An option from the share dialog to send link to all other sync devices -->
@@ -642,6 +719,8 @@
     <string name="notification_pbm_channel_name">Privénavigatiesessie</string>
     <!-- Text shown in the notification that pops up to remind the user that a private browsing session is active. -->
     <string name="notification_pbm_delete_text">Privétabbladen verwijderen</string>
+    <!-- Text shown in the notification that pops up to remind the user that a private browsing session is active. -->
+    <string name="notification_pbm_delete_text_2">Privétabbladen sluiten</string>
     <!-- Notification action to open Fenix and resume the current browsing session. -->
     <string name="notification_pbm_action_open">Openen</string>
     <!-- Notification action to delete all current private browsing sessions AND switch to Fenix (bring it to the foreground) -->
@@ -660,14 +739,18 @@
     <string name="snackbar_tab_closed">Tabblad gesloten</string>
     <!-- Text shown in snackbar when user closes all tabs -->
     <string name="snackbar_tabs_closed">Tabbladen gesloten</string>
+    <!-- Text shown in snackbar when user adds a site to top sites -->
+    <string name="snackbar_added_to_top_sites">Toegevoegd aan topwebsites!</string>
     <!-- Text shown in snackbar when user closes a private tab -->
     <string name="snackbar_private_tab_closed">Privétabblad gesloten</string>
     <!-- Text shown in snackbar when user closes all private tabs -->
     <string name="snackbar_private_tabs_closed">Privétabbladen gesloten</string>
     <!-- Text shown in snackbar when user deletes all private tabs -->
     <string name="snackbar_private_tabs_deleted">Privétabbladen verwijderd</string>
-    <!-- Text for action to undo deleting a tab or collection shown in snackbar -->
+    <!-- Text shown in snackbar to undo deleting a tab, top site or collection -->
     <string name="snackbar_deleted_undo">ONGEDAAN MAKEN</string>
+    <!-- Text shown in snackbar when user removes a top site -->
+    <string name="snackbar_top_site_removed">Website verwijderd</string>
     <!-- Text for action to undo deleting a tab or collection shown in a11y dialog -->
     <string name="a11y_dialog_deleted_undo">Ongedaan maken</string>
     <!-- Text for action to confirm deleting a tab or collection shown in a11y dialog -->
@@ -690,7 +773,7 @@
     <!-- Message for copying the URL via long press on the toolbar -->
     <string name="url_copied">URL gekopieerd</string>
     <!-- Sample text for accessibility font size -->
-    <string name="accessibility_text_size_sample_text">Pa’s wijze lynx bezag vroom het fikse aquaduct. Pa’s wijze lynx bezag vroom het fikse aquaduct. Pa’s wijze lynx bezag vroom het fikse aquaduct. Pa’s wijze lynx bezag vroom het fikse aquaduct.</string>
+    <string name="accessibility_text_size_sample_text_1">Dit is voorbeeldtekst. Hier wordt mee getoond hoe tekst wordt weergegeven, wanneer u met deze instelling de afmeting vergroot of verkleint.</string>
     <!-- Summary for Accessibility Text Size Scaling Preference -->
     <string name="preference_accessibility_text_size_summary">Tekst op websites groter of kleiner maken</string>
     <!-- Title for Accessibility Text Size Scaling Preference -->
@@ -717,11 +800,6 @@
     <!-- Subtitle for the history items in delete browsing data, parameter will be replaced with the
         number of history pages the user has -->
     <string name="preferences_delete_browsing_data_browsing_history_subtitle">%d pagina’s</string>
-    <!-- Title for the collections item in Delete browsing data -->
-    <string name="preferences_delete_browsing_data_collections_title">Collecties</string>
-    <!-- Subtitle for the collections item in Delete browsing data, parameter will be replaced with the
-        number of collections that will be deleted -->
-    <string name="preferences_delete_browsing_data_collections_subtitle">%d collecties</string>
     <!-- Title for the cookies item in Delete browsing data -->
     <string name="preferences_delete_browsing_data_cookies">Cookies</string>
     <!-- Subtitle for the cookies item in Delete browsing data -->
@@ -769,10 +847,13 @@
     <!-- text for the Firefox Preview feature section header
     The first parameter is the name of the app (e.g. Firefox Preview) -->
     <string name="onboarding_feature_section_header">Maak kennis met %s</string>
-    <!-- text for the theme picker onboarding card header -->
-    <string name="onboarding_theme_picker_header">Kies uw thema</string>
-    <!-- text for the theme picker onboarding card description -->
-    <string name="onboarding_theme_picker_description">Probeer het donkere thema: zachter voor uw batterij en uw ogen.</string>
+    <!-- text for the "What's New" onboarding card header -->
+    <string name="onboarding_whats_new_header1">Bekijk wat er nieuw is</string>
+    <!-- text for the "what's new" onboarding card description
+    The first parameter is the short name of the app (e.g. Firefox) -->
+    <string name="onboarding_whats_new_description">Hebt u vragen over het opnieuw ontworpen %s? Wilt u weten wat er is gewijzigd?</string>
+    <!-- text for underlined clickable link that is part of "what's new" onboarding card description that links to an FAQ -->
+    <string name="onboarding_whats_new_description_linktext">Hier vindt u antwoorden</string>
     <!-- text for the firefox account onboarding card header
     The first parameter is the name of the app (e.g. Firefox Preview) -->
     <string name="onboarding_firefox_account_header">Haal het meeste uit %s.</string>
@@ -796,16 +877,30 @@
     <string name="onboarding_tracking_protection_header">Bescherm uzelf</string>
     <!-- text for the tracking protection card description
     The first parameter is the name of the app (e.g. Firefox Preview) -->
-    <string name="onboarding_tracking_protection_description">%s blokkeert advertentietrackers die u volgen op het internet.
-    
-    </string>
+    <string name="onboarding_tracking_protection_description1">%s helpt voorkomen dat websites u online volgen.</string>
+    <!-- text for tracking protection radio button option for standard level of blocking -->
+    <string name="onboarding_tracking_protection_standard_button">Standaard</string>
+    <!-- text for standard blocking option button description -->
+    <string name="onboarding_tracking_protection_standard_button_description">Blokkeert minder trackers, maar staat toe dat pagina’s normaal worden geladen</string>
+    <!-- text for tracking protection radio button option for strict level of blocking -->
+    <string name="onboarding_tracking_protection_strict_button">Streng (aanbevolen)</string>
+    <!-- text for strict blocking option button description -->
+    <string name="onboarding_tracking_protection_strict_button_description">Blokkeert meer trackers voor betere bescherming en prestaties, maar kan ervoor zorgen dat sommige websites niet goed werken</string>
+    <!-- text for the toolbar position card header
+        In English this is an idiom for "choose a side as in an argument or fight"
+        but it is ok to make this more literally about "choosing a position in a physical space -->
+    <string name="onboarding_toolbar_position_header">Neem stelling</string>
+    <!-- text for the toolbar position card description -->
+    <string name="onboarding_toolbar_position_description">Probeer surfen met één hand met de werkbalk onderin, of verplaats deze naar boven.</string>
     <!-- text for the private browsing onboarding card header -->
     <string name="onboarding_private_browsing_header">Surf privé</string>
     <!-- text for the private browsing onboarding card description
     The first parameter is an icon that represents private browsing -->
-    <string name="onboarding_private_browsing_description">Wanneer u het pictogram %s ziet, is privénavigatie slechts een tik verwijderd.
-   
-   </string>
+    <string name="onboarding_private_browsing_description1">Eenmalig een privétabblad openen: tik op het pictogram %s.</string>
+    <!-- text for the private browsing onboarding card description, explaining how to always using private browsing -->
+    <string name="onboarding_private_browsing_always_description">Altijd privétabbladen openen: werk uw instellingen voor privénavigatie bij.</string>
+    <!-- text for the private browsing onbording card button, that launches settings -->
+    <string name="onboarding_private_browsing_button">Instellingen openen</string>
     <!-- text for the privacy notice onboarding card header -->
     <string name="onboarding_privacy_notice_header">Uw privacy</string>
     <!-- text for the privacy notice onboarding card description
@@ -822,6 +917,10 @@
     <string name="onboarding_finish">Beginnen met surfen</string>
 
     <!-- Onboarding theme -->
+    <!-- text for the theme picker onboarding card header -->
+    <string name="onboarding_theme_picker_header">Kies uw thema</string>
+    <!-- text for the theme picker onboarding card description -->
+    <string name="onboarding_theme_picker_description1">Spaar uw batterij en uw ogen door de donkere modus in te schakelen.</string>
     <!-- Automatic theme setting (will follow device setting) -->
     <string name="onboarding_theme_automatic_title">Automatisch</string>
     <!-- Summary of automatic theme setting (will follow device setting) -->
@@ -877,6 +976,8 @@
     <string name="preference_enhanced_tracking_protection_standard_description">Gebalanceerd voor bescherming en prestaties.</string>
     <!-- Preference description for enhanced tracking protection for the standard protection settings -->
     <string name="preference_enhanced_tracking_protection_standard_description_2">Pagina’s worden normaal geladen, maar er worden minder trackers geblokkeerd.</string>
+    <!--  Accessibility text for the Standard protection information icon  -->
+    <string name="preference_enhanced_tracking_protection_standard_info_button">Wat wordt geblokkeerd door standaard bescherming tegen volgen</string>
     <!-- Preference for enhanced tracking protection for the strict protection settings -->
     <string name="preference_enhanced_tracking_protection_strict">Streng</string>
     <!-- Preference for enhanced tracking protection for the strict protection settings, default setting -->
@@ -887,7 +988,37 @@
     <string name="preference_enhanced_tracking_protection_strict_recommended">Streng (aanbevolen)</string>
     <!-- Preference description for enhanced tracking protection for the strict protection settings -->
     <string name="preference_enhanced_tracking_protection_strict_description">Sterkere bescherming, maar kan ervoor zorgen dat sommige websites of inhoud niet werken.</string>
+    <!--  Accessibility text for the Strict protection information icon  -->
+    <string name="preference_enhanced_tracking_protection_strict_info_button">Wat wordt geblokkeerd door strenge bescherming tegen volgen</string>
+    <!-- Preference for enhanced tracking protection for the custom protection settings -->
+    <string name="preference_enhanced_tracking_protection_custom">Aangepast</string>
+    <!-- Preference description for enhanced tracking protection for the strict protection settings -->
+    <string name="preference_enhanced_tracking_protection_custom_description">Kies welke trackers en scripts u wilt blokkeren</string>
+    <!--  Accessibility text for the Strict protection information icon  -->
+    <string name="preference_enhanced_tracking_protection_custom_info_button">Wat wordt geblokkeerd door aangepaste bescherming tegen volgen</string>
     <!-- Header for categories that are being blocked by current Enhanced Tracking Protection settings -->
+    <!-- Preference for enhanced tracking protection for the custom protection settings for cookies-->
+    <string name="preference_enhanced_tracking_protection_custom_cookies">Cookies</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for cookies-->
+    <string name="preference_enhanced_tracking_protection_custom_cookies_1">Cross-site- en sociale-mediatrackers</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for cookies-->
+    <string name="preference_enhanced_tracking_protection_custom_cookies_2">Cookies van niet-bezochte websites</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for cookies-->
+    <string name="preference_enhanced_tracking_protection_custom_cookies_3">Alle cookies van derden (kan ervoor zorgen dat websites niet goed werken)</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for cookies-->
+    <string name="preference_enhanced_tracking_protection_custom_cookies_4">Alle cookies (zal ervoor zorgen dat websites niet goed werken)</string>
+    <!-- Preference for enhanced tracking protection for the custom protection settings for tracking content -->
+    <string name="preference_enhanced_tracking_protection_custom_tracking_content">Volginhoud</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for tracking content-->
+    <string name="preference_enhanced_tracking_protection_custom_tracking_content_1">In alle tabbladen</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for tracking content-->
+    <string name="preference_enhanced_tracking_protection_custom_tracking_content_2">Alleen in privétabbladen</string>
+    <!-- Option for enhanced tracking protection for the custom protection settings for tracking content-->
+    <string name="preference_enhanced_tracking_protection_custom_tracking_content_3">Alleen in aangepaste tabbladen</string>
+    <!-- Preference for enhanced tracking protection for the custom protection settings -->
+    <string name="preference_enhanced_tracking_protection_custom_cryptominers">Cryptominers</string>
+    <!-- Preference for enhanced tracking protection for the custom protection settings -->
+    <string name="preference_enhanced_tracking_protection_custom_fingerprinters">Fingerprinters</string>
     <string name="enhanced_tracking_protection_blocked">Geblokkeerd</string>
     <!-- Header for categories that are being not being blocked by current Enhanced Tracking Protection settings -->
     <string name="enhanced_tracking_protection_allowed">Toegestaan</string>
@@ -928,6 +1059,18 @@
     <!-- Open source licenses page title
     The first parameter is the app name -->
     <string name="open_source_licenses_title">%s | OSS-bibliotheken</string>
+
+    <!-- About page link text to open support link -->
+    <string name="about_support">Ondersteuning</string>
+    <!-- About page link text to open privacy notice link -->
+    <string name="about_privacy_notice">Privacyverklaring</string>
+    <!-- About page link text to open know your rights link -->
+    <string name="about_know_your_rights">Ken uw rechten</string>
+    <!-- About page link text to open licensing information link -->
+    <string name="about_licensing_information">Licentie-informatie</string>
+
+    <!-- About page link text to open a screen with libraries that are used -->
+    <string name="about_other_open_source_libraries">Gebruikte bibliotheken</string>
 
     <!-- Content description of the tab counter toolbar button when one tab is open -->
     <string name="tab_counter_content_description_one_tab">1 tabblad</string>
@@ -976,6 +1119,10 @@
     <string name="preferences_passwords_sync_logins_sign_in">Aanmelden bij Sync</string>
     <!-- Preference to access list of saved logins -->
     <string name="preferences_passwords_saved_logins">Opgeslagen aanmeldingen</string>
+    <!-- Description of empty list of saved passwords. Placeholder is replaced with app name.  -->
+    <string name="preferences_passwords_saved_logins_description_empty_text">De aanmeldingen die u opslaat of synchroniseert met %s worden hier getoond.</string>
+    <!-- Preference to access list of saved logins -->
+    <string name="preferences_passwords_saved_logins_description_empty_learn_more_link">Meer info over Sync.</string>
     <!-- Preference to access list of login exceptions that we never save logins for -->
     <string name="preferences_passwords_exceptions">Uitzonderingen</string>
     <!-- Empty description of list of login exceptions that we never save logins for -->
@@ -1036,4 +1183,104 @@
     <string name="logins_warning_dialog_set_up_now">Nu instellen</string>
     <!-- Title of PIN verification dialog to direct users to re-enter their device credentials to access their logins -->
     <string name="logins_biometric_prompt_message_pin">Ontgrendel uw apparaat</string>
+    <!-- Title for Accessibility Force Enable Zoom Preference -->
+    <string name="preference_accessibility_force_enable_zoom">Inzoomen op alle websites</string>
+    <!-- Summary for Accessibility Force Enable Zoom Preference -->
+    <string name="preference_accessibility_force_enable_zoom_summary">Knijpen en inzoomen toestaan, zelfs op websites die deze beweging voorkomen.</string>
+
+    <!-- Title of the Add search engine screen -->
+    <string name="search_engine_add_custom_search_engine_title">Zoekmachine toevoegen</string>
+    <!-- Title of the Edit search engine screen -->
+    <string name="search_engine_edit_custom_search_engine_title">Zoekmachine bewerken</string>
+    <!-- Content description (not visible, for screen readers etc.): Title for the button to add a search engine in the action bar -->
+    <string name="search_engine_add_button_content_description">Toevoegen</string>
+    <!-- Content description (not visible, for screen readers etc.): Title for the button to save a search engine in the action bar -->
+    <string name="search_engine_add_custom_search_engine_edit_button_content_description">Opslaan</string>
+    <!-- Text for the menu button to edit a search engine -->
+    <string name="search_engine_edit">Bewerken</string>
+    <!-- Text for the menu button to delete a search engine -->
+    <string name="search_engine_delete">Verwijderen</string>
+
+    <!-- Text for the button to create a custom search engine on the Add search engine screen -->
+    <string name="search_add_custom_engine_label_other">Overig</string>
+    <!-- Placeholder text shown in the Search Engine Name TextField before a user enters text -->
+    <string name="search_add_custom_engine_name_hint">Naam</string>
+    <!-- Placeholder text shown in the Search String TextField before a user enters text -->
+    <string name="search_add_custom_engine_search_string_hint">Te gebruiken zoekterm</string>
+    <!-- Description text for the Search String TextField. The %s is part of the string -->
+    <string name="search_add_custom_engine_search_string_example">Zoekvraag vervangen door ‘%s’. Bijvoorbeeld: \nhttps://www.google.com/search?q=%s</string>
+    <!-- Text for the button to learn more about adding a custom search engine -->
+    <string name="search_add_custom_engine_learn_more_label">Meer info</string>
+
+    <!-- Accessibility description for the form in which details about the custom search engine are entered -->
+    <string name="search_add_custom_engine_form_description">Details aangepaste zoekmachine</string>
+    <!-- Accessibility description for the 'Learn more' link -->
+    <string name="search_add_custom_engine_learn_more_description">Koppeling naar meer info</string>
+
+    <!-- Text shown when a user leaves the name field empty -->
+    <string name="search_add_custom_engine_error_empty_name">Voer naam van zoekmachine in</string>
+    <!-- Text shown when a user tries to add a search engine that already exists -->
+    <string name="search_add_custom_engine_error_existing_name">Er bestaat al een zoekmachine met de naam ‘%s’.</string>
+    <!-- Text shown when a user leaves the search string field empty -->
+    <string name="search_add_custom_engine_error_empty_search_string">Voer een zoekterm in</string>
+    <!-- Text shown when a user leaves out the required template string -->
+    <string name="search_add_custom_engine_error_missing_template">Controleer of de zoekterm met de voorbeeldopmaak overeenkomt</string>
+    <!-- Text shown when we aren't able to validate the custom search query. The first parameter is the url of the custom search engine -->
+    <string name="search_add_custom_engine_error_cannot_reach">Fout bij verbinden met ‘%s’</string>
+    <!-- Text shown when a user creates a new search engine -->
+    <string name="search_add_custom_engine_success_message">%s aangemaakt</string>
+    <!-- Text shown when a user successfully edits a custom search engine -->
+    <string name="search_edit_custom_engine_success_message">%s opgeslagen</string>
+    <!-- Text shown when a user successfully deletes a custom search engine -->
+    <string name="search_delete_search_engine_success_message">%s verwijderd</string>
+
+    <!-- Title text shown for the migration screen to the new browser. Placeholder replaced with app name -->
+    <string name="migration_title">Welkom bij een geheel nieuw %s</string>
+    <!-- Description text followed by a list of things migrating (e.g. Bookmarks, History). Placeholder replaced with app name-->
+    <string name="migration_description">Een volledige opnieuw ontworpen browser wacht op u, met verbeterde prestaties en functies die u helpen meer online te doen.\n\nEen ogenblik, we werken %s bij met uw</string>
+    <!-- Text on the disabled button while in progress. Placeholder replaced with app name -->
+    <string name="migration_updating_app_button_text">%s bijwerken…</string>
+    <!-- Text on the enabled button. Placeholder replaced with app name-->
+    <string name="migration_update_app_button">%s starten</string>
+    <!-- Accessibility description text for a completed migration item -->
+    <string name="migration_icon_description">Migratie voltooid</string>
+    <!--Text on list of migrated items (e.g. Settings, History, etc.)-->
+    <string name="migration_text_passwords">Wachtwoorden</string>
+
+    <!-- Heading for the instructions to allow a permission -->
+    <string name="phone_feature_blocked_intro">Toestaan:</string>
+    <!-- First step for the allowing a permission -->
+    <string name="phone_feature_blocked_step_settings">1. Ga naar Android-instellingen</string>
+    <!-- Second step for the allowing a permission -->
+    <string name="phone_feature_blocked_step_permissions"><![CDATA[2. Tik op <b>Machtigingen</b>]]></string>
+    <!-- Third step for the allowing a permission (Fore example: Camera) -->
+    <string name="phone_feature_blocked_step_feature"><![CDATA[3. Zet <b>%1$s</b> op AAN]]></string>
+
+    <!-- Label that indicates a site is using a secure connection -->
+    <string name="quick_settings_sheet_secure_connection">Beveiligde verbinding</string>
+    <!-- Label that indicates a site is using a insecure connection -->
+    <string name="quick_settings_sheet_insecure_connection">Niet-beveiligde verbinding</string>
+    <!-- Confirmation message for a dialog confirming if the user wants to delete all the permissions for all sites-->
+    <string name="confirm_clear_permissions_on_all_sites">Weet u zeker dat u alle machtigingen op alle websites wilt wissen?</string>
+    <!-- Confirmation message for a dialog confirming if the user wants to delete all the permissions for a site-->
+    <string name="confirm_clear_permissions_site">Weet u zeker dat u alle machtigingen voor deze website wilt wissen?</string>
+    <!-- Confirmation message for a dialog confirming if the user wants to set default value a permission for a site-->
+    <string name="confirm_clear_permission_site">Weet u zeker dat u deze toestemming voor deze website wilt wissen?</string>
+    <!-- label shown when there are not site exceptions to show in the site exception settings -->
+    <string name="no_site_exceptions">Geen website-uitzonderingen</string>
+    <!-- Label for the Pocket default top site -->
+    <string name="pocket_top_articles">Topartikelen</string>
+    <!-- Bookmark deletion confirmation -->
+    <string name="bookmark_deletion_confirmation">Weet u zeker dat u deze bladwijzer wilt verwijderen?</string>
+    <!-- Browser menu button that adds a top site to the home fragment -->
+    <string name="browser_menu_add_to_top_sites">Aan topwebsites toevoegen</string>
+    <!-- text shown before the issuer name to indicate who its verified by, parameter is the name of
+     the certificate authority that verified the ticket-->
+    <string name="certificate_info_verified_by">Geverifieerd door: %1$s </string>
+    <!-- Login overflow menu delete button -->
+    <string name="login_menu_delete_button">Verwijderen</string>
+    <!-- Message in delete confirmation dialog for logins -->
+    <string name="login_deletion_confirmation">Weet u zeker dat u deze aanmelding wilt verwijderen?</string>
+    <!-- Positive action of a dialog asking to delete  -->
+    <string name="dialog_delete_positive">Verwijderen</string>
 </resources>

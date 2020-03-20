@@ -5,15 +5,11 @@
 package org.mozilla.fenix.components.metrics
 
 import android.content.Context
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.MainScope
-import mozilla.components.service.glean.BuildConfig
 import mozilla.components.service.glean.Glean
-import mozilla.components.service.glean.config.Configuration
-import mozilla.components.service.glean.net.ConceptFetchHttpUploader
 import mozilla.components.service.glean.private.NoExtraKeys
-import mozilla.components.support.utils.Browsers
+import mozilla.components.support.base.log.logger.Logger
+import org.mozilla.fenix.GleanMetrics.AboutPage
+import org.mozilla.fenix.GleanMetrics.AppTheme
 import org.mozilla.fenix.GleanMetrics.BookmarksManagement
 import org.mozilla.fenix.GleanMetrics.Collections
 import org.mozilla.fenix.GleanMetrics.ContextMenu
@@ -30,19 +26,25 @@ import org.mozilla.fenix.GleanMetrics.MediaNotification
 import org.mozilla.fenix.GleanMetrics.MediaState
 import org.mozilla.fenix.GleanMetrics.Metrics
 import org.mozilla.fenix.GleanMetrics.Pings
+import org.mozilla.fenix.GleanMetrics.Pocket
 import org.mozilla.fenix.GleanMetrics.PrivateBrowsingMode
 import org.mozilla.fenix.GleanMetrics.PrivateBrowsingShortcut
 import org.mozilla.fenix.GleanMetrics.QrScanner
 import org.mozilla.fenix.GleanMetrics.ReaderMode
 import org.mozilla.fenix.GleanMetrics.SearchDefaultEngine
 import org.mozilla.fenix.GleanMetrics.SearchShortcuts
+import org.mozilla.fenix.GleanMetrics.SearchSuggestions
 import org.mozilla.fenix.GleanMetrics.SearchWidget
 import org.mozilla.fenix.GleanMetrics.SyncAccount
 import org.mozilla.fenix.GleanMetrics.SyncAuth
 import org.mozilla.fenix.GleanMetrics.Tab
+import org.mozilla.fenix.GleanMetrics.ToolbarSettings
+import org.mozilla.fenix.GleanMetrics.TopSites
 import org.mozilla.fenix.GleanMetrics.TrackingProtection
+import org.mozilla.fenix.GleanMetrics.UserSpecifiedSearchEngines
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.utils.BrowsersCache
 
 private class EventWrapper<T : Enum<T>>(
     private val recorder: ((Map<T, String>?) -> Unit),
@@ -114,12 +116,6 @@ private val Event.wrapper: EventWrapper<*>?
         )
         is Event.FindInPageClosed -> EventWrapper<NoExtraKeys>(
             { FindInPage.closed.record(it) }
-        )
-        is Event.FindInPageNext -> EventWrapper<NoExtraKeys>(
-            { FindInPage.nextResult.record(it) }
-        )
-        is Event.FindInPagePrevious -> EventWrapper<NoExtraKeys>(
-            { FindInPage.previousResult.record(it) }
         )
         is Event.FindInPageSearchCommitted -> EventWrapper<NoExtraKeys>(
             { FindInPage.searchedPage.record(it) }
@@ -364,9 +360,8 @@ private val Event.wrapper: EventWrapper<*>?
         is Event.PrivateBrowsingStaticShortcutPrivateTab -> EventWrapper<NoExtraKeys>(
             { PrivateBrowsingShortcut.staticShortcutPriv.record(it) }
         )
-        is Event.WhatsNewTapped -> EventWrapper(
-            { Events.whatsNewTapped.record(it) },
-            { Events.whatsNewTappedKeys.valueOf(it) }
+        is Event.WhatsNewTapped -> EventWrapper<NoExtraKeys>(
+            { Events.whatsNewTapped.record(it) }
         )
         is Event.TabMediaPlay -> EventWrapper<NoExtraKeys>(
             { Tab.mediaPlay.record(it) }
@@ -445,6 +440,57 @@ private val Event.wrapper: EventWrapper<*>?
         is Event.ViewLoginPassword -> EventWrapper<NoExtraKeys>(
             { Logins.viewPasswordLogin.record(it) }
         )
+        is Event.PrivateBrowsingShowSearchSuggestions -> EventWrapper<NoExtraKeys>(
+            { SearchSuggestions.enableInPrivate.record(it) }
+        )
+        is Event.ToolbarPositionChanged -> EventWrapper(
+            { ToolbarSettings.changedPosition.record(it) },
+            { ToolbarSettings.changedPositionKeys.valueOf(it) }
+        )
+        is Event.CustomEngineAdded -> EventWrapper<NoExtraKeys>(
+            { UserSpecifiedSearchEngines.customEngineAdded.record(it) }
+        )
+        is Event.CustomEngineDeleted -> EventWrapper<NoExtraKeys>(
+            { UserSpecifiedSearchEngines.customEngineDeleted.record(it) }
+        )
+        is Event.SaveLoginsSettingChanged -> EventWrapper(
+            { Logins.saveLoginsSettingChanged.record(it) },
+            { Logins.saveLoginsSettingChangedKeys.valueOf(it) }
+        )
+        is Event.TopSiteOpenInNewTab -> EventWrapper<NoExtraKeys>(
+            { TopSites.openInNewTab.record(it) }
+        )
+        is Event.TopSiteOpenInPrivateTab -> EventWrapper<NoExtraKeys>(
+            { TopSites.openInPrivateTab.record(it) }
+        )
+        is Event.TopSiteRemoved -> EventWrapper<NoExtraKeys>(
+            { TopSites.remove.record(it) }
+        )
+        is Event.SupportTapped -> EventWrapper<NoExtraKeys>(
+            { AboutPage.supportTapped.record(it) }
+        )
+        is Event.PrivacyNoticeTapped -> EventWrapper<NoExtraKeys>(
+            { AboutPage.privacyNoticeTapped.record(it) }
+        )
+        is Event.RightsTapped -> EventWrapper<NoExtraKeys>(
+            { AboutPage.rightsTapped.record(it) }
+        )
+        is Event.LicensingTapped -> EventWrapper<NoExtraKeys>(
+            { AboutPage.licensingTapped.record(it) }
+        )
+        is Event.LibrariesThatWeUseTapped -> EventWrapper<NoExtraKeys>(
+            { AboutPage.librariesTapped.record(it) }
+        )
+        is Event.PocketTopSiteClicked -> EventWrapper<NoExtraKeys>(
+            { Pocket.pocketTopSiteClicked.record(it) }
+        )
+        is Event.PocketTopSiteRemoved -> EventWrapper<NoExtraKeys>(
+            { Pocket.pocketTopSiteRemoved.record(it) }
+        )
+        is Event.DarkThemeSelected -> EventWrapper(
+            { AppTheme.darkThemeSelected.record(it) },
+            { AppTheme.darkThemeSelectedKeys.valueOf(it) }
+        )
         // Don't record other events in Glean:
         is Event.AddBookmark -> null
         is Event.OpenedBookmark -> null
@@ -452,56 +498,61 @@ private val Event.wrapper: EventWrapper<*>?
         is Event.InteractWithSearchURLArea -> null
         is Event.ClearedPrivateData -> null
         is Event.DismissedOnboarding -> null
+        is Event.FennecToFenixMigrated -> null
     }
 
 class GleanMetricsService(private val context: Context) : MetricsService {
+    override val type = MetricServiceType.Data
+
+    private val logger = Logger("GleanMetricsService")
     private var initialized = false
-    /*
-     * We need to keep an eye on when we are done starting so that we don't
-     * accidentally stop ourselves before we've ever started.
-     */
-    private lateinit var gleanInitializer: Job
-    private lateinit var gleanSetStartupMetrics: Job
 
     private val activationPing = ActivationPing(context)
+    private val installationPing = InstallationPing(context)
 
     override fun start() {
+        logger.debug("Enabling Glean.")
+        // Initialization of Glean already happened in FenixApplication.
         Glean.setUploadEnabled(true)
 
         if (initialized) return
         initialized = true
+
+        // The code below doesn't need to execute immediately, so we'll add them to the visual
+        // completeness task queue to be run later.
+        val taskManager = context.components.performance.visualCompletenessTaskManager
 
         // We have to initialize Glean *on* the main thread, because it registers lifecycle
         // observers. However, the activation ping must be sent *off* of the main thread,
         // because it calls Google ad APIs that must be called *off* of the main thread.
         // These two things actually happen in parallel, but that should be ok because Glean
         // can handle events being recorded before it's initialized.
-        gleanInitializer = MainScope().launch {
+        taskManager.add {
             Glean.registerPings(Pings)
-            Glean.initialize(context,
-                Configuration(channel = BuildConfig.BUILD_TYPE,
-                    httpClient = ConceptFetchHttpUploader(
-                        lazy(LazyThreadSafetyMode.NONE) { context.components.core.client }
-                    )))
-        }
-        // setStartupMetrics is not a fast function. It does not need to be done before we can consider
-        // ourselves initialized. So, let's do it, well, later.
-        gleanSetStartupMetrics = MainScope().launch {
-            setStartupMetrics()
         }
 
-        context.settings().totalUriCount = 0
+        // setStartupMetrics is not a fast function. It does not need to be done before we can consider
+        // ourselves initialized. So, let's do it, well, later.
+        taskManager.add {
+            setStartupMetrics()
+        }
     }
 
     internal fun setStartupMetrics() {
         Metrics.apply {
-            defaultBrowser.set(Browsers.all(context).isDefaultBrowser)
+            defaultBrowser.set(BrowsersCache.all(context).isDefaultBrowser)
             MozillaProductDetector.getMozillaBrowserDefault(context)?.also {
                 defaultMozBrowser.set(it)
             }
             mozillaProducts.set(MozillaProductDetector.getInstalledMozillaProducts(context))
             adjustCampaign.set(context.settings().adjustCampaignId)
-            totalUriCount.set(context.settings().totalUriCount.toString())
+            toolbarPosition.set(
+                if (context.settings().shouldUseBottomToolbar) {
+                    Event.ToolbarPositionChanged.Position.BOTTOM.name
+                } else {
+                    Event.ToolbarPositionChanged.Position.TOP.name
+                }
+            )
         }
 
         SearchDefaultEngine.apply {
@@ -517,11 +568,10 @@ class GleanMetricsService(private val context: Context) : MetricsService {
         }
 
         activationPing.checkAndSend()
+        installationPing.checkAndSend()
     }
 
     override fun stop() {
-        gleanInitializer.cancel()
-        gleanSetStartupMetrics.cancel()
         Glean.setUploadEnabled(false)
     }
 

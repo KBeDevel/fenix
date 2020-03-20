@@ -38,7 +38,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@UseExperimental(kotlinx.coroutines.ObsoleteCoroutinesApi::class)
 @Config(application = TestApplication::class)
 class QuickSettingsFragmentStoreTest {
     private val context = spyk(testContext)
@@ -57,7 +56,7 @@ class QuickSettingsFragmentStoreTest {
         val permissions = mockk<SitePermissions>(relaxed = true)
 
         val store = QuickSettingsFragmentStore.createStore(
-            context, "url", true, permissions, settings
+            context, "url", "Hello", "issuer", true, permissions, settings
         )
 
         assertAll {
@@ -71,13 +70,16 @@ class QuickSettingsFragmentStoreTest {
     @Test
     fun `createWebsiteInfoState constructs a WebsiteInfoState with the right values for a secure connection`() {
         val websiteUrl = "https://host.com/page1"
+        val websiteTitle = "Hello"
+        val certificateIssuer = "issuer"
         val securedStatus = true
 
-        val state = QuickSettingsFragmentStore.createWebsiteInfoState(websiteUrl, securedStatus)
+        val state = QuickSettingsFragmentStore.createWebsiteInfoState(websiteUrl, websiteTitle, securedStatus, certificateIssuer)
 
         assertAll {
             assertThat(state).isNotNull()
             assertThat(state.websiteUrl).isSameAs(websiteUrl)
+            assertThat(state.websiteTitle).isSameAs(websiteTitle)
             assertThat(state.securityInfoRes).isEqualTo(secureStringRes)
             assertThat(state.iconRes).isEqualTo(secureDrawableRes)
             assertThat(state.iconTintRes).isEqualTo(secureColorRes)
@@ -87,13 +89,16 @@ class QuickSettingsFragmentStoreTest {
     @Test
     fun `createWebsiteInfoState constructs a WebsiteInfoState with the right values for an insecure connection`() {
         val websiteUrl = "https://host.com/page1"
+        val websiteTitle = "Hello"
+        val certificateIssuer = "issuer"
         val securedStatus = false
 
-        val state = QuickSettingsFragmentStore.createWebsiteInfoState(websiteUrl, securedStatus)
+        val state = QuickSettingsFragmentStore.createWebsiteInfoState(websiteUrl, websiteTitle, securedStatus, certificateIssuer)
 
         assertAll {
             assertThat(state).isNotNull()
             assertThat(state.websiteUrl).isSameAs(websiteUrl)
+            assertThat(state.websiteTitle).isSameAs(websiteTitle)
             assertThat(state.securityInfoRes).isEqualTo(insecureStringRes)
             assertThat(state.iconRes).isEqualTo(insecureDrawableRes)
             assertThat(state.iconTintRes).isEqualTo(insecureColorRes)
@@ -113,6 +118,8 @@ class QuickSettingsFragmentStoreTest {
         every { permissions.microphone } returns SitePermissions.Status.NO_DECISION
         every { permissions.notification } returns SitePermissions.Status.BLOCKED
         every { permissions.location } returns SitePermissions.Status.ALLOWED
+        every { permissions.autoplayAudible } returns SitePermissions.Status.BLOCKED
+        every { permissions.autoplayInaudible } returns SitePermissions.Status.BLOCKED
 
         val state = QuickSettingsFragmentStore.createWebsitePermissionState(
             context, permissions, appSettings
@@ -126,6 +133,8 @@ class QuickSettingsFragmentStoreTest {
             assertThat(state.microphone).isNotNull()
             assertThat(state.notification).isNotNull()
             assertThat(state.location).isNotNull()
+            assertThat(state.autoplayAudible).isNotNull()
+            assertThat(state.autoplayInaudible).isNotNull()
         }
     }
 
@@ -184,10 +193,14 @@ class QuickSettingsFragmentStoreTest {
             val microphonePermissionName = "Microphone"
             val notificationPermissionName = "Notification"
             val locationPermissionName = "Location"
+            val autoplayAudiblePermissionName = "AutoplayAudible"
+            val autoplayInaudiblePermissionName = "AutoplayInaudible"
             val initialCameraStatus = "initialCameraStatus"
             val initialMicStatus = "initialMicStatus"
             val initialNotificationStatus = "initialNotificationStatus"
             val initialLocationStatus = "initialLocationStatus"
+            val initialAutoplayAudibleStatus = "initialAutoplayAudibleStatus"
+            val initialAutoplayInaudibleStatus = "initialAutoplayInaudibleStatus"
             val updatedMicrophoneStatus = "updatedNotificationStatus"
             val updatedMicrophoneEnabledStatus = false
             val defaultVisibilityStatus = true
@@ -211,6 +224,14 @@ class QuickSettingsFragmentStoreTest {
                 location = WebsitePermission.Location(
                     initialLocationStatus, defaultVisibilityStatus,
                     defaultEnabledStatus, defaultBlockedByAndroidStatus, locationPermissionName
+                ),
+                autoplayAudible = WebsitePermission.AutoplayAudible(
+                    initialAutoplayAudibleStatus, defaultVisibilityStatus,
+                    defaultEnabledStatus, defaultBlockedByAndroidStatus, autoplayAudiblePermissionName
+                ),
+                autoplayInaudible = WebsitePermission.AutoplayInaudible(
+                    initialAutoplayInaudibleStatus, defaultVisibilityStatus,
+                    defaultEnabledStatus, defaultBlockedByAndroidStatus, autoplayInaudiblePermissionName
                 )
             )
             val initialState = QuickSettingsFragmentState(

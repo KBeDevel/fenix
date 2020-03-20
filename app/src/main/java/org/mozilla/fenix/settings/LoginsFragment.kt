@@ -13,15 +13,17 @@ import android.content.Intent
 import android.os.Build
 import android.os.Build.VERSION_CODES.M
 import android.os.Bundle
+import android.util.Log
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreference
 import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
@@ -34,9 +36,10 @@ import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.getPreferenceKey
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.showToolbar
 import java.util.concurrent.Executors
 
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class LoginsFragment : PreferenceFragmentCompat(), AccountObserver {
 
     @TargetApi(M)
@@ -61,17 +64,21 @@ class LoginsFragment : PreferenceFragmentCompat(), AccountObserver {
         biometricPromptCallback = object : BiometricPrompt.AuthenticationCallback() {
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                // Authentication Error
+                Log.e(LOG_TAG, "onAuthenticationError $errString")
             }
 
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                Log.d(LOG_TAG, "onAuthenticationSucceeded")
                 lifecycleScope.launch(Main) {
+                    // Workaround for likely biometric library bug
+                    // https://github.com/mozilla-mobile/fenix/issues/8438
+                    delay(SHORT_DELAY_MS)
                     navigateToSavedLoginsFragment()
                 }
             }
 
             override fun onAuthenticationFailed() {
-                // Authenticated Failed
+                Log.e(LOG_TAG, "onAuthenticationFailed")
             }
         }
 
@@ -83,10 +90,31 @@ class LoginsFragment : PreferenceFragmentCompat(), AccountObserver {
             .build()
     }
 
+    @Suppress("ComplexMethod")
     override fun onResume() {
         super.onResume()
-        activity?.title = getString(R.string.preferences_passwords_logins_and_passwords)
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(getString(R.string.preferences_passwords_logins_and_passwords))
+
+        val saveLoginsSettingKey = getPreferenceKey(R.string.pref_key_save_logins_settings)
+        findPreference<Preference>(saveLoginsSettingKey)?.apply {
+            summary = getString(
+                if (context.settings().shouldPromptToSaveLogins)
+                    R.string.preferences_passwords_save_logins_ask_to_save else
+                    R.string.preferences_passwords_save_logins_never_save
+            )
+            setOnPreferenceClickListener {
+                navigateToSaveLoginSettingFragment()
+                true
+            }
+        }
+
+        val autofillPreferenceKey = getPreferenceKey(R.string.pref_key_autofill_logins)
+        findPreference<SwitchPreference>(autofillPreferenceKey)?.apply {
+            isEnabled = context.settings().shouldPromptToSaveLogins
+            isChecked =
+                context.settings().shouldAutofillLogins && context.settings().shouldPromptToSaveLogins
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
 
         val savedLoginsKey = getPreferenceKey(R.string.pref_key_saved_logins)
         findPreference<Preference>(savedLoginsKey)?.setOnPreferenceClickListener {
@@ -242,7 +270,8 @@ class LoginsFragment : PreferenceFragmentCompat(), AccountObserver {
     }
 
     private fun navigateToAccountSettingsFragment() {
-        val directions = LoginsFragmentDirections.actionLoginsFragmentToAccountSettingsFragment()
+        val directions =
+            LoginsFragmentDirections.actionLoginsFragmentToAccountSettingsFragment()
         findNavController().navigate(directions)
     }
 
@@ -256,7 +285,15 @@ class LoginsFragment : PreferenceFragmentCompat(), AccountObserver {
         findNavController().navigate(directions)
     }
 
+    private fun navigateToSaveLoginSettingFragment() {
+        val directions =
+            LoginsFragmentDirections.actionLoginsFragmentToSaveLoginSettingFragment()
+        findNavController().navigate(directions)
+    }
+
     companion object {
+        const val SHORT_DELAY_MS = 100L
+        private const val LOG_TAG = "LoginsFragment"
         const val PIN_REQUEST = 303
     }
 }

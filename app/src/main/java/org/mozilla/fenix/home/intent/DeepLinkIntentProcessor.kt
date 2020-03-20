@@ -24,7 +24,8 @@ class DeepLinkIntentProcessor(
 ) : HomeIntentProcessor {
 
     override fun process(intent: Intent, navController: NavController, out: Intent): Boolean {
-        return if (intent.scheme == "fenix") {
+        val scheme = intent.scheme?.contains("fenix") ?: return false
+        return if (scheme) {
             intent.data?.let { handleDeepLink(it, navController) }
             true
         } else {
@@ -32,6 +33,7 @@ class DeepLinkIntentProcessor(
         }
     }
 
+    @Suppress("ComplexMethod")
     private fun handleDeepLink(deepLink: Uri, navController: NavController) {
         handleDeepLinkSideEffects(deepLink)
 
@@ -42,6 +44,7 @@ class DeepLinkIntentProcessor(
             "settings_search_engine" -> GlobalDirections.SearchEngine
             "settings_accessibility" -> GlobalDirections.Accessibility
             "settings_delete_browsing_data" -> GlobalDirections.DeleteData
+            "settings_addon_manager" -> GlobalDirections.SettingsAddonManager
             else -> return
         }
 

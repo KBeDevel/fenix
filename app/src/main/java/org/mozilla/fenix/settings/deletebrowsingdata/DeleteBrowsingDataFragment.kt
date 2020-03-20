@@ -8,9 +8,7 @@ import android.content.DialogInterface
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import kotlinx.android.synthetic.main.fragment_delete_browsing_data.*
@@ -19,16 +17,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mozilla.components.browser.session.Session
 import mozilla.components.browser.session.SessionManager
-import mozilla.components.feature.tab.collections.TabCollection
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.showToolbar
 
 @SuppressWarnings("TooManyFunctions")
 class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_data) {
     private lateinit var sessionObserver: SessionManager.Observer
-    private var tabCollections: List<TabCollection> = listOf()
     private lateinit var controller: DeleteBrowsingDataController
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -45,12 +42,6 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
         }
 
         requireComponents.core.sessionManager.register(sessionObserver, owner = this)
-        requireComponents.core.tabCollectionStorage.apply {
-            getCollections().observe(this@DeleteBrowsingDataFragment, Observer {
-                this@DeleteBrowsingDataFragment.tabCollections = it
-            })
-        }
-
         getCheckboxes().forEach {
             it.onCheckListener = { _ -> updateDeleteButton() }
         }
@@ -71,10 +62,7 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
 
     override fun onResume() {
         super.onResume()
-        (activity as AppCompatActivity).apply {
-            title = getString(R.string.preferences_delete_browsing_data)
-            supportActionBar?.show()
-        }
+        showToolbar(getString(R.string.preferences_delete_browsing_data))
 
         getCheckboxes().forEach {
             it.visibility = View.VISIBLE
@@ -114,7 +102,6 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
                     when (i) {
                         OPEN_TABS_INDEX -> controller.deleteTabs()
                         HISTORY_INDEX -> controller.deleteBrowsingData()
-                        COLLECTIONS_INDEX -> controller.deleteCollections(tabCollections)
                         COOKIES_INDEX -> controller.deleteCookies()
                         CACHED_INDEX -> controller.deleteCachedFiles()
                         PERMS_INDEX -> controller.deleteSitePermissions()
@@ -149,21 +136,25 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
 
         updateItemCounts()
 
-        FenixSnackbar.make(view!!, FenixSnackbar.LENGTH_SHORT)
+        FenixSnackbar.makeWithToolbarPadding(requireView(), FenixSnackbar.LENGTH_SHORT)
             .setText(resources.getString(R.string.preferences_delete_browsing_data_snackbar))
             .show()
 
         if (popAfter) viewLifecycleOwner.lifecycleScope.launch(
             Dispatchers.Main
         ) {
-            findNavController().popBackStack(R.id.homeFragment, false)
+            returnToDeletionOrigin()
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        progress_bar.visibility = View.GONE
     }
 
     private fun updateItemCounts() {
         updateTabCount()
         updateHistoryCount()
-        updateCollectionsCount()
         updateCookies()
         updateCachedImagesAndFiles()
         updateSitePermissions()
@@ -196,24 +187,6 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
         }
     }
 
-    private fun updateCollectionsCount() {
-        view?.browsing_data_item?.subtitleView?.text = ""
-
-        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            val collectionsCount =
-                requireComponents.core.tabCollectionStorage.getTabCollectionsCount()
-            launch(Dispatchers.Main) {
-                view?.collections_item?.apply {
-                    subtitleView.text =
-                        resources.getString(
-                            R.string.preferences_delete_browsing_data_collections_subtitle,
-                            collectionsCount
-                        )
-                }
-            }
-        }
-    }
-
     private fun updateCookies() {
         // NO OP until we have GeckoView methods to count cookies
     }
@@ -231,11 +204,15 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
         return listOf(
             fragmentView.open_tabs_item,
             fragmentView.browsing_data_item,
-            fragmentView.collections_item,
             fragmentView.cookies_item,
             fragmentView.cached_files_item,
             fragmentView.site_permissions_item
         )
+    }
+
+    private fun returnToDeletionOrigin() {
+        val directions = DeleteBrowsingDataFragmentDirections.actionDeleteBrowsingDataFragmentToSettingsFragment()
+        findNavController().navigate(directions)
     }
 
     companion object {
@@ -244,9 +221,8 @@ class DeleteBrowsingDataFragment : Fragment(R.layout.fragment_delete_browsing_da
 
         private const val OPEN_TABS_INDEX = 0
         private const val HISTORY_INDEX = 1
-        private const val COLLECTIONS_INDEX = 2
-        private const val COOKIES_INDEX = 3
-        private const val CACHED_INDEX = 4
-        private const val PERMS_INDEX = 5
+        private const val COOKIES_INDEX = 2
+        private const val CACHED_INDEX = 3
+        private const val PERMS_INDEX = 4
     }
 }

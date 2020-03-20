@@ -39,8 +39,7 @@ Before you attempt to make a contribution please read the [Community Participati
 
 * Browse our [current Issues](https://github.com/mozilla-mobile/fenix/issues), or [file a security issue][sec issue].
 
-* Slack: [#fenix on mozilla-android.slack.com](mozilla-android.slack.com) | [Join here](https://join.slack.com/t/mozilla-android/shared_invite/enQtNzk3NDczMzc0ODMzLWNjYTQ5MjA3ZDI0NzNhOTBjMWUyMmNmZDcwM2ZhY2YxZjdjMWIwZWY1YmQ3NjJmMDNkODYxMmRmNTdjNGJmMTU)
-(**We're available Monday-Friday, GMT and PST working hours**).
+* Matrix: [#fenix:mozilla.org channel](https://chat.mozilla.org/#/room/#fenix:mozilla.org) (**We're available Monday-Friday, GMT and PST working hours**).
 
 * Check out the [project wiki](https://github.com/mozilla-mobile/fenix/wiki) for more information.
 
@@ -63,13 +62,13 @@ Note: Both Android SDK and NDK are required.
   ```shell
   ./gradlew clean app:assembleGeckoBetaDebug
   ```
-  
+
   Use app:assembleGeckoNightlyDebug to build with the Gecko Nightly version instead.
 
 3. Make sure to select the correct build variant in Android Studio. See the next section.
 
 ### Guide to Build Variants
-We have a lot of build variants. Each variant is composed of two flavors. One flavor is the version of Gecko to use and the other describes 
+We have a lot of build variants. Each variant is composed of two flavors. One flavor is the version of Gecko to use and the other describes
 which app id and settings to use. Here is a description of what each means:
 
 - **geckoBeta** (recommended) uses the Beta variant of the Gecko rendering engine, which corresponds to the next version of Gecko which will go to production
@@ -83,7 +82,48 @@ which app id and settings to use. Here is a description of what each means:
 - **fenixBeta** is a release build with beta signing which uses the org.mozilla.fenix.beta app id for beta releases to Google Play
 - **fenixProduction** is a release build with release signing which uses the org.mozilla.fenix app id for production releases to Google Play
 - **fennecProduction** is an experimental build with release signing which uses the org.mozilla.firefox app id and supports upgrading the older Firefox. **WARNING** Pre-production versions of this may result in data loss.
-- **forPerformanceTest** is a release build with the debuggable flag set and test activities enabled for running Raptor performance tests
+- **forPerformanceTest**: see "Performance Build Variants" below.
+
+#### Performance Build Variants
+For accurate performance measurements, read this section!
+
+If you want to analyze performance during **local development** (note: there is a non-trivial performance impact - see caveats):
+- Recommendation: use a `forPerformanceTest` variant with local Leanplum, Adjust, & Sentry API tokens: contact the front-end perf group for access to them
+- Rationale: `forPerformanceTest` is a release variant with `debuggable` set to true. There are numerous performance-impacting differences between debug and release variants so we need a release variant. To profile, we also need debuggable, which is disabled on other release variants. If API tokens are not provided, the SDKs may change their behavior in non-trivial ways.
+- Caveats:
+  - debuggable has a non-trivial & variable impact on performance but is needed to take profiles.
+  - Random experiment opt-in & feature flags may impact performance (see [perf-frontend-issues#45](https://github.com/mozilla-mobile/perf-frontend-issues/issues/45) for mitigation).
+  - This is slower to build than debug builds because it does additional tasks (e.g. minification) similar to other release builds
+
+Nightly `forPerformanceTest` variants with API tokens already added [are also available from Taskcluster](https://firefox-ci-tc.services.mozilla.com/tasks/index/project.mobile.fenix.v2.performance-test/).
+
+If you want to run **performance tests/benchmarks** in automation or locally:
+- Recommendation: production builds. If debuggable is required, use recommendation above but note the caveat above. If your needs are not met, please contact the front-end perf group to identify a new solution.
+- Rationale: like the rationale above, we need release variants so the choice is based on the debuggable flag.
+
+For additional context on these recommendations, see [the perf build variant analysis](https://docs.google.com/document/d/1aW-m0HYncTDDiRz_2x6EjcYkjBpL9SHhhYix13Vil30/edit#).
+
+You will **need to sign `forPerformanceTest` variants.** For local development, our recommendation is to add the following configuration to `app/build.gradle`:
+
+```groovy
+android { // this line already exists
+    // ...
+
+    buildTypes { // this line already exists
+        // ...
+
+        forPerformanceTest releaseTemplate >> { // this line already exists.
+            // ...
+
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+```
+
+This recommendation will let you use AS just like you do with debug builds but **please do not check in these changes.**
+
+See [perf-frontend-issues#44](https://github.com/mozilla-mobile/perf-frontend-issues/issues/44) for efforts to make performance signing easier.
 
 ## Pre-push hooks
 To reduce review turn-around time, we'd like all pushes to run tests locally. We'd
@@ -119,11 +159,11 @@ Specify a relative path to your local `android-components` checkout via `autoPub
 If enabled, during a Fenix build android-components will be compiled and locally published if it has been modified,
 and published versions of android-components modules will be automatically used instead of whatever is declared in Dependencies.kt.
 
-### application-services composite builds
-Specify a relative path to your local `application-services` checkout via `substitutions.application-services.dir`.
+### application-services auto-publication workflow
+Specify a relative path to your local `application-services` checkout via `autoPublish.application-services.dir`.
 
-If enabled, a multi-project gradle build will be configured, and any application-services dependency will be substituted
-for the local version. Any changes to `application-services` will be automatically included in Fenix builds.
+If enabled, during a Fenix build application-services will be compiled and locally published,
+and published versions of application-services modules will be automatically used instead of whatever is declared in Dependencies.kt.
 
 ### GeckoView
 Specify a relative path to your local `mozilla-central` checkout via `dependencySubstitutions.geckoviewTopsrcdir`,

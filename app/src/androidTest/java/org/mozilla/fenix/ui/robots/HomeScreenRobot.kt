@@ -6,31 +6,40 @@
 
 package org.mozilla.fenix.ui.robots
 
+import androidx.recyclerview.widget.RecyclerView
+import android.graphics.Bitmap
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.contrib.RecyclerViewActions
+import androidx.test.espresso.contrib.RecyclerViewActions.actionOnItem
 import androidx.test.espresso.matcher.ViewMatchers
-import androidx.test.espresso.matcher.ViewMatchers.Visibility
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
-import androidx.test.espresso.matcher.ViewMatchers.hasFocus
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.matcher.ViewMatchers.Visibility
+import androidx.test.espresso.matcher.ViewMatchers.hasDescendant
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
+import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.Until
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.UiSelector
-import org.hamcrest.CoreMatchers
-import org.hamcrest.Matchers.allOf
-import org.hamcrest.Matchers.containsString
+import androidx.test.uiautomator.Until
+import org.hamcrest.CoreMatchers.containsString
+import org.hamcrest.CoreMatchers.allOf
+import org.hamcrest.CoreMatchers.not
 import org.mozilla.fenix.R
-import org.mozilla.fenix.helpers.click
+import org.mozilla.fenix.helpers.TestAssetHelper
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
 import org.mozilla.fenix.helpers.click
+import org.mozilla.fenix.helpers.ext.waitNotNull
+import org.mozilla.fenix.components.Search
+import org.mozilla.fenix.helpers.withBitmapDrawable
+import org.mozilla.fenix.helpers.matchers.hasItem
 
 /**
  * Implementation of Robot Pattern for the home screen menu.
@@ -46,10 +55,14 @@ class HomeScreenRobot {
     fun verifyCollectionsHeader() = assertCollectionsHeader()
     fun verifyNoCollectionsHeader() = assertNoCollectionsHeader()
     fun verifyNoCollectionsText() = assertNoCollectionsText()
+    fun verifyNoCollectionsHeaderIsNotShown() = assertNoCollectionsHeaderIsNotVisible()
+    fun verifyCollectionsHeaderIsNotShown() = assertCollectionsHeaderIsNotVisible()
+    fun verifyNoCollectionsTextIsNotShown() = assertNoCollectionsTextIsNotVisible()
     fun verifyNoTabsOpenedHeader() = assertNoTabsOpenedHeader()
     fun verifyHomeWordmark() = assertHomeWordmark()
     fun verifyHomeToolbar() = assertHomeToolbar()
     fun verifyHomeComponent() = assertHomeComponent()
+    fun verifyDefaultSearchEngine(searchEngine: String) = verifySearchEngineIcon(searchEngine)
 
     // First Run elements
     fun verifyWelcomeHeader() = assertWelcomeHeader()
@@ -69,49 +82,77 @@ class HomeScreenRobot {
     fun verifyTrackingProtectionToggle() = assertTrackingProtectionToggle()
     fun verifyProtectYourselfText() = assertProtectYourselfText()
 
+    // What's new elements
+    fun verifyWhatsNewHeader() = assertWhatsNewHeather()
+    fun verifyWhatsNewLink() = assertWhatsNewLink()
+
+    // Browse privately
     fun verifyBrowsePrivatelyHeader() = assertBrowsePrivatelyHeader()
     fun verifyBrowsePrivatelyText() = assertBrowsePrivatelyText()
+
+    // Take a position
+    fun verifyTakePositionHeader() = assertTakePositionheader()
+    fun verifyTakePositionElements() {
+        assertTakePositionBottomRadioButton()
+        assertTakePositionTopRadioButton()
+    }
+
+    // Your privacy
     fun verifyYourPrivacyHeader() = assertYourPrivacyHeader()
     fun verifyYourPrivacyText() = assertYourPrivacyText()
     fun verifyPrivacyNoticeButton() = assertPrivacyNoticeButton()
     fun verifyStartBrowsingButton() = assertStartBrowsingButton()
 
-    // Private mode elements
     fun verifyPrivateSessionHeader() = assertPrivateSessionHeader()
+
     fun verifyPrivateSessionMessage(visible: Boolean = true) = assertPrivateSessionMessage(visible)
+    fun verifyPrivateTabsCloseTabsButton() = assertPrivateTabsCloseTabsButton()
+
     fun verifyShareTabsButton(visible: Boolean = true) = assertShareTabsButton(visible)
-    fun verifyCloseTabsButton(visible: Boolean = true) = assertCloseTabsButton(visible)
+    fun verifyCloseTabsButton(title: String) =
+        assertCloseTabsButton(title)
 
     fun verifyExistingTabList() = assertExistingTabList()
+    fun verifyExistingOpenTabs(title: String) = assertExistingOpenTabs(title)
+
+    fun verifyExistingTopSitesList() = assertExistingTopSitesList()
+    fun verifyNotExistingTopSitesList(title: String) = assertNotExistingTopSitesList(title)
+    fun verifyExistingTopSitesTabs(title: String) = assertExistingTopSitesTabs(title)
+    fun verifyTopSiteContextMenuItems() = assertTopSiteContextMenuItems()
 
     // Collections element
     fun clickCollectionThreeDotButton() {
         collectionThreeDotButton().click()
-        mDevice.wait(Until.findObject(By.text("Delete collection")), waitingTime)
+        mDevice.waitNotNull(Until.findObject(By.text("Delete collection")), waitingTime)
     }
+
     fun selectRenameCollection() {
         onView(allOf(ViewMatchers.withText("Rename collection"))).click()
-        mDevice.wait(Until.findObject(By.res("org.mozilla.fenix.debug:id/name_collection_edittext")), waitingTime)
+        mDevice.waitNotNull(Until.findObject(By.res("name_collection_edittext")))
     }
+
     fun selectDeleteCollection() {
         onView(allOf(ViewMatchers.withText("Delete collection"))).click()
-        mDevice.wait(Until.findObject(By.res("message")), waitingTime)
+        mDevice.waitNotNull(Until.findObject(By.res("message")), waitingTime)
     }
+
     fun confirmDeleteCollection() {
         onView(allOf(ViewMatchers.withText("DELETE"))).click()
-        mDevice.wait(Until.findObject(By.res("org.mozilla.fenix.debug:id/collections_header")), waitingTime)
+        mDevice.waitNotNull(Until.findObject(By.res("collections_header")), waitingTime)
     }
+
     fun typeCollectionName(name: String) {
-        mDevice.wait(Until.findObject(By.res("org.mozilla.fenix.debug:id/name_collection_edittext")), waitingTime)
-        collectionNameTextField().check(matches(hasFocus()))
+        mDevice.wait(Until.findObject(By.res("name_collection_edittext")), waitingTime)
         collectionNameTextField().perform(ViewActions.replaceText(name))
         collectionNameTextField().perform(ViewActions.pressImeActionButton())
     }
+
     fun scrollToElementByText(text: String): UiScrollable {
         val appView = UiScrollable(UiSelector().scrollable(true))
         appView.scrollTextIntoView(text)
         return appView
     }
+
     fun swipeUpToDismissFirstRun() {
         scrollToElementByText("Start browsing")
     }
@@ -120,11 +161,38 @@ class HomeScreenRobot {
         closeTabButton().click()
     }
 
+    fun togglePrivateBrowsingModeOnOff() {
+        onView(ViewMatchers.withResourceName("privateBrowsingButton"))
+            .perform(click())
+    }
+
+    fun swipeToBottom() = onView(withId(R.id.homeLayout)).perform(ViewActions.swipeUp())
+
+    fun swipeToTop() = onView(withId(R.id.sessionControlRecyclerView)).perform(ViewActions.swipeDown())
+
+    fun swipeTabRight(title: String) =
+        onView(allOf(withId(R.id.tab_title), withText(title))).perform(ViewActions.swipeRight())
+
+    fun swipeTabLeft(title: String) =
+        onView(allOf(withId(R.id.tab_title), withText(title))).perform(ViewActions.swipeLeft())
+
+    fun closeTabViaXButton(title: String) = closeTabViaX(title)
+
+    fun verifySnackBarText(expectedText: String) {
+        val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        mDevice.waitNotNull(Until.findObject(By.text(expectedText)), TestAssetHelper.waitingTime)
+    }
+
+    fun snackBarButtonClick(expectedText: String) {
+        onView(allOf(withId(R.id.snackbar_btn), withText(expectedText))).check(
+            matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE))
+        ).perform(ViewActions.click())
+    }
+
     class Transition {
         val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
         fun openThreeDotMenu(interact: ThreeDotMenuMainRobot.() -> Unit): ThreeDotMenuMainRobot.Transition {
-            mDevice.waitForIdle()
             threeDotButton().perform(click())
 
             ThreeDotMenuMainRobot().interact()
@@ -132,7 +200,6 @@ class HomeScreenRobot {
         }
 
         fun openSearch(interact: SearchRobot.() -> Unit): SearchRobot.Transition {
-            mDevice.waitForIdle()
             navigationToolbar().perform(click())
 
             SearchRobot().interact()
@@ -153,11 +220,70 @@ class HomeScreenRobot {
         }
 
         fun openTabsListThreeDotMenu(interact: ThreeDotMenuMainRobot.() -> Unit): ThreeDotMenuMainRobot.Transition {
-            mDevice.waitForIdle()
             tabsListThreeDotButton().perform(click())
 
             ThreeDotMenuMainRobot().interact()
             return ThreeDotMenuMainRobot.Transition()
+        }
+
+        fun closeAllPrivateTabs(interact: HomeScreenRobot.() -> Unit): Transition {
+            onView(withId(R.id.close_tabs_button))
+                .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+                .perform(click())
+
+            HomeScreenRobot().interact()
+            return Transition()
+        }
+
+        fun openNavigationToolbar(interact: NavigationToolbarRobot.() -> Unit): NavigationToolbarRobot.Transition {
+
+            assertNavigationToolbar().perform(click())
+            NavigationToolbarRobot().interact()
+            return NavigationToolbarRobot.Transition()
+        }
+
+        fun openContextMenuOnTopSitesWithTitle(title: String, interact: HomeScreenRobot.() -> Unit): Transition {
+            onView(withId(R.id.top_sites_list)).perform(
+                actionOnItem<RecyclerView.ViewHolder>(hasDescendant(withText(title)), ViewActions.longClick())
+            )
+
+            HomeScreenRobot().interact()
+            return Transition()
+        }
+
+        fun openTopSiteTabWithTitle(title: String, interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
+            onView(withId(R.id.top_sites_list)).perform(
+                actionOnItem<RecyclerView.ViewHolder>(hasDescendant(withText(title)), click())
+            )
+
+            BrowserRobot().interact()
+            return BrowserRobot.Transition()
+        }
+
+        fun removeTopSite(interact: HomeScreenRobot.() -> Unit): Transition {
+            onView(withText("Remove"))
+                .check((matches(withEffectiveVisibility(Visibility.VISIBLE))))
+                .perform(click())
+
+            HomeScreenRobot().interact()
+            return Transition()
+        }
+
+        fun openTopSiteInPrivateTab(interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
+            onView(withText("Open in private tab"))
+                .check((matches(withEffectiveVisibility(Visibility.VISIBLE))))
+                .perform(click())
+
+            BrowserRobot().interact()
+            return BrowserRobot.Transition()
+        }
+
+        fun openCommonMythsLink(interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
+            onView(withId(R.id.private_session_common_myths))
+                    .perform(click())
+
+            BrowserRobot().interact()
+            return BrowserRobot.Transition()
         }
     }
 }
@@ -168,14 +294,15 @@ fun homeScreen(interact: HomeScreenRobot.() -> Unit): HomeScreenRobot.Transition
 }
 
 val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+val appContext = InstrumentationRegistry.getInstrumentation().targetContext
 
 private fun navigationToolbar() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Search or enter address")))
+    onView(allOf(withText("Search or enter address")))
 
 private fun closeTabButton() = onView(withId(R.id.close_tab_button))
 
 private fun assertNavigationToolbar() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Search or enter address")))
+    onView(allOf(withText("Search or enter address")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertHomeScreen() = onView(ViewMatchers.withResourceName("homeLayout"))
@@ -195,51 +322,79 @@ private fun assertHomeToolbar() = onView(ViewMatchers.withResourceName("toolbar"
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertOpenTabsHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Open tabs")))
+    onView(allOf(withText("Open tabs")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertAddTabButton() =
-    onView(CoreMatchers.allOf(ViewMatchers.withId(R.id.add_tab_button), isDisplayed()))
+    onView(allOf(withId(R.id.add_tab_button), isDisplayed()))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertNoTabsOpenedHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("No open tabs")))
+    onView(allOf(withText("No open tabs")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertNoTabsOpenedText() {
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Your open tabs will be shown here.")))
+    onView(allOf(withText("Your open tabs will be shown here.")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
 private fun assertCollectionsHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Collections")))
+    onView(allOf(withText("Collections")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertNoCollectionsHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("No collections")))
+    onView(allOf(withText("No collections")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+
+private fun assertNoCollectionsHeaderIsNotVisible() =
+    onView(allOf(withText("No collections")))
+        .check(doesNotExist())
+
+private fun assertCollectionsHeaderIsNotVisible() =
+    onView(allOf(withText("Collections")))
+        .check(doesNotExist())
 
 private fun assertNoCollectionsText() =
+        onView(
+            allOf(
+                withText("Collect the things that matter to you. To start, save open tabs to a new collection.")
+            )
+        )
+            .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+
+private fun assertNoCollectionsTextIsNotVisible() =
     onView(
-        CoreMatchers.allOf(
-            ViewMatchers
-                .withText("Collect the things that matter to you. To start, save open tabs to a new collection.")
+        allOf(
+            withText("Collect the things that matter to you. To start, save open tabs to a new collection.")
         )
     )
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+        .check(doesNotExist())
 
-private fun assertHomeComponent() = onView(ViewMatchers.withResourceName("home_component"))
+private fun assertHomeComponent() = onView(ViewMatchers.withResourceName("sessionControlRecyclerView"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun threeDotButton() = onView(allOf(ViewMatchers.withId(R.id.menuButton)))
+private fun threeDotButton() = onView(allOf(withId(R.id.menuButton)))
+
+private fun verifySearchEngineIcon(searchEngineIcon: Bitmap, searchEngineName: String) {
+    onView(withId(R.id.search_engine_icon))
+        .check(matches(withBitmapDrawable(searchEngineIcon, searchEngineName)))
+}
+
+private fun getSearchEngine(searchEngineName: String) =
+    Search(appContext).searchEngineManager.getDefaultSearchEngine(appContext, searchEngineName)
+
+private fun verifySearchEngineIcon(searchEngineName: String) {
+    val ddgSearchEngine = getSearchEngine(searchEngineName)
+    verifySearchEngineIcon(ddgSearchEngine.icon, ddgSearchEngine.name)
+}
 
 // First Run elements
 private fun assertWelcomeHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Welcome to Firefox Preview!")))
+    onView(allOf(withText("Welcome to Firefox Preview!")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertGetTheMostHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Get the most out of Firefox Preview.")))
+    onView(allOf(withText("Get the most out of Firefox Preview.")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertAccountsSignInButton() =
@@ -247,15 +402,15 @@ private fun assertAccountsSignInButton() =
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertGetToKnowHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Get to know Firefox Preview")))
+    onView(allOf(withText("Get to know Firefox Preview")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertChooseThemeHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Choose your theme")))
+    onView(allOf(withText("Choose your theme")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertChooseThemeText() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Try dark theme: easier on your battery and your eyes.")))
+    onView(allOf(withText("Save some battery and your eyesight by enabling dark mode.")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertLightThemeToggle() =
@@ -263,7 +418,7 @@ private fun assertLightThemeToggle() =
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertLightThemeDescription() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Light theme")))
+    onView(allOf(withText("Light theme")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertDarkThemeToggle() =
@@ -271,31 +426,31 @@ private fun assertDarkThemeToggle() =
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertDarkThemeDescription() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Dark theme")))
+    onView(allOf(withText("Dark theme")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertAutomaticThemeToggle() =
-    onView(ViewMatchers.withResourceName("theme_automatic_radio_button"))
+    onView(withId(R.id.theme_automatic_radio_button))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertAutomaticThemeDescription() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Automatic")))
+    onView(allOf(withText("Automatic")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertProtectYourselfHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Protect yourself")))
+    onView(allOf(withText("Protect yourself")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertTrackingProtectionToggle() = onView(
-    CoreMatchers.allOf(ViewMatchers.withResourceName("tracking_protection_toggle"))
+    allOf(ViewMatchers.withResourceName("tracking_protection_toggle"))
 )
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertProtectYourselfText() {
     onView(
-        CoreMatchers.allOf(
-            ViewMatchers.withText(
-                "Firefox Preview blocks ad trackers that follow you around the web."
+        allOf(
+            withText(
+                "Firefox Preview helps stop websites from tracking you online."
             )
         )
     )
@@ -303,34 +458,56 @@ private fun assertProtectYourselfText() {
 }
 
 private fun assertBrowsePrivatelyHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Browse privately")))
+    onView(allOf(withText("Browse privately")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertBrowsePrivatelyText() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText(containsString("private browsing is just a tap away."))))
+    onView(allOf(withText(containsString("Update your private browsing settings."))))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertYourPrivacyHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Your privacy")))
+    onView(allOf(withText("Your privacy")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertYourPrivacyText() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText(
-        "We’ve designed Firefox Preview to give you control over what you share online and what you share with us.")))
+    onView(
+        allOf(
+            withText(
+                "We’ve designed Firefox Preview to give you control over what you share online and what you share with us."
+            )
+        )
+    )
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertPrivacyNoticeButton() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Read our privacy notice")))
+    onView(allOf(withText("Read our privacy notice")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
+// What's new elements
+private fun assertWhatsNewHeather() = onView(allOf(withText("See what’s new")))
+        .check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
+
+private fun assertWhatsNewLink() = onView(allOf(withText("Get answers here")))
+        .check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
+
 private fun assertStartBrowsingButton() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Start browsing")))
+    onView(allOf(withText("Start browsing")))
+        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+
+// Take a position
+private fun assertTakePositionheader() = onView(allOf(withText("Take a position")))
+        .check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
+
+private fun assertTakePositionTopRadioButton() = onView(ViewMatchers.withResourceName("toolbar_top_radio_button"))
+        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+
+private fun assertTakePositionBottomRadioButton() = onView(ViewMatchers.withResourceName("toolbar_bottom_radio_button"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 // Private mode elements
 private fun assertPrivateSessionHeader() =
-    onView(CoreMatchers.allOf(ViewMatchers.withText("Private session")))
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+    onView(allOf(withText("Private tabs")))
+        .check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
 
 const val PRIVATE_SESSION_MESSAGE = "Firefox Preview clears your search and browsing history " +
         "when you quit the app or close all private tabs. While this doesn’t make you anonymous to websites or " +
@@ -338,27 +515,76 @@ const val PRIVATE_SESSION_MESSAGE = "Firefox Preview clears your search and brow
         "who uses this device."
 
 private fun assertPrivateSessionMessage(visible: Boolean) =
-    onView(CoreMatchers.allOf(ViewMatchers.withText(PRIVATE_SESSION_MESSAGE)))
+    onView(allOf(withText(PRIVATE_SESSION_MESSAGE)))
         .check(
             if (visible) matches(withEffectiveVisibility(Visibility.VISIBLE)) else doesNotExist()
         )
 
-private fun assertShareTabsButton(visible: Boolean) =
-    onView(CoreMatchers.allOf(ViewMatchers.withId(R.id.share_tabs_button), isDisplayed()))
-        .check(matches(withEffectiveVisibility(visibleOrGone(visible))))
+private fun assertShareTabsButton(visible: Boolean) = onView(allOf(withId(R.id.share_tabs_button)))
+        .check(
+                if (visible) matches(withEffectiveVisibility(Visibility.VISIBLE)) else matches(withEffectiveVisibility(Visibility.INVISIBLE))
+        )
 
-private fun assertCloseTabsButton(visible: Boolean) =
-    onView(CoreMatchers.allOf(ViewMatchers.withId(R.id.close_tab_button), isDisplayed()))
-        .check(matches(withEffectiveVisibility(visibleOrGone(visible))))
-
-private fun visibleOrGone(visibility: Boolean) = if (visibility) Visibility.VISIBLE else Visibility.GONE
-
-private fun assertExistingTabList() =
-    onView(CoreMatchers.allOf(ViewMatchers.withId(R.id.item_tab)))
+private fun assertCloseTabsButton(title: String) =
+    onView(allOf(withId(R.id.close_tab_button), withContentDescription("Close tab $title")))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun tabsListThreeDotButton() = onView(allOf(ViewMatchers.withId(R.id.tabs_overflow_button)))
+private fun visibleOrGone(visibility: Boolean) =
+    if (visibility) Visibility.VISIBLE else Visibility.GONE
 
-private fun collectionThreeDotButton() = onView(allOf(ViewMatchers.withId(R.id.collection_overflow_button)))
+private fun assertExistingTabList() =
+    onView(allOf(withId(R.id.item_tab)))
+        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun collectionNameTextField() = onView(allOf(ViewMatchers.withResourceName("name_collection_edittext"), hasFocus()))
+private fun assertExistingOpenTabs(title: String) =
+    onView(withId(R.id.sessionControlRecyclerView)).perform(
+        RecyclerViewActions.scrollTo<RecyclerView.ViewHolder>(
+            ViewMatchers.hasDescendant(withText(title))
+        )
+    ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+
+private fun tabsListThreeDotButton() = onView(allOf(withId(R.id.tabs_overflow_button)))
+
+private fun collectionThreeDotButton() =
+    onView(allOf(withId(R.id.collection_overflow_button)))
+
+private fun collectionNameTextField() =
+    onView(allOf(ViewMatchers.withResourceName("name_collection_edittext")))
+
+private fun closeTabViaX(title: String) {
+    val closeButton = onView(
+        allOf(
+            withId(R.id.close_tab_button),
+            withContentDescription("Close tab $title")
+        )
+    )
+    closeButton.perform(click())
+}
+
+private fun assertPrivateTabsCloseTabsButton() = onView(allOf(withId(R.id.close_tabs_button)))
+
+private fun assertExistingTopSitesList() =
+    onView(allOf(withId(R.id.top_sites_list)))
+        .check((matches(withEffectiveVisibility(Visibility.VISIBLE))))
+
+private fun assertExistingTopSitesTabs(title: String) =
+    onView(allOf(withId(R.id.top_sites_list)))
+        .check(matches(hasItem(hasDescendant(withText(title)))))
+        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+
+private fun assertNotExistingTopSitesList(title: String) =
+    onView(allOf(withId(R.id.top_sites_list)))
+        .check(matches(not(hasItem(hasDescendant(withText(title))))))
+
+private fun assertTopSiteContextMenuItems() {
+    val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+    mDevice.waitNotNull(
+        Until.findObject(By.text("Open in private tab")),
+        waitingTime
+    )
+    mDevice.waitNotNull(
+        Until.findObject(By.text("Remove")),
+        waitingTime
+    )
+}

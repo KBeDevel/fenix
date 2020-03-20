@@ -12,6 +12,7 @@ transforms:
 job-defaults:
     attributes:
         code-review: true
+        retrigger: true
     worker-type: b-android
     worker:
         docker-image: {in-tree: base}
@@ -49,9 +50,9 @@ jobs:
         treeherder:
             symbol: ktlint
     lint:
-        description: 'Running tlint over all modules'
+        description: 'Running lint over all modules'
         run:
             using: gradlew
-            gradlew: [lintDebug]
+            gradlew: ['lintGeckoNightlyDebug']
         treeherder:
             symbol: lint

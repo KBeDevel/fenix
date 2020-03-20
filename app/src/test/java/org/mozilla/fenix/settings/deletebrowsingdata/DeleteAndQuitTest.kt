@@ -13,7 +13,6 @@ import io.mockk.verify
 import io.mockk.verifyOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runBlockingTest
@@ -37,7 +36,6 @@ import org.mozilla.fenix.utils.Settings
 import org.robolectric.annotation.Config
 
 @ExperimentalCoroutinesApi
-@UseExperimental(ObsoleteCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 @Config(application = TestApplication::class)
 class DeleteAndQuitTest {
@@ -88,7 +86,6 @@ class DeleteAndQuitTest {
         verifyOrder {
             snackbar.show()
             removeAllTabsUseCases.invoke()
-            snackbar.dismiss()
             activity.finish()
         }
 
@@ -140,8 +137,6 @@ class DeleteAndQuitTest {
             engine.clearData(Engine.BrowsingData.select(Engine.BrowsingData.DOM_STORAGES))
 
             historyStorage
-
-            snackbar.dismiss()
 
             activity.finish()
         }

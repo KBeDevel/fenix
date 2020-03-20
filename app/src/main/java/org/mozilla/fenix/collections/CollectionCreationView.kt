@@ -11,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -21,6 +22,7 @@ import androidx.transition.TransitionManager
 import kotlinx.android.extensions.LayoutContainer
 import kotlinx.android.synthetic.main.component_collection_creation.*
 import kotlinx.android.synthetic.main.component_collection_creation.view.*
+import mozilla.components.feature.tab.collections.TabCollection
 import mozilla.components.support.ktx.android.view.hideKeyboard
 import mozilla.components.support.ktx.android.view.showKeyboard
 import org.mozilla.fenix.R
@@ -28,8 +30,7 @@ import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.increaseTapArea
 import org.mozilla.fenix.ext.toShortUrl
-import org.mozilla.fenix.home.sessioncontrol.Tab
-import org.mozilla.fenix.home.sessioncontrol.TabCollection
+import org.mozilla.fenix.home.Tab
 
 @SuppressWarnings("LargeClass")
 class CollectionCreationView(
@@ -137,7 +138,7 @@ class CollectionCreationView(
         view.bottom_button_bar_layout.setOnClickListener(null)
         view.bottom_button_bar_layout.isClickable = false
 
-        val drawable = view.context.getDrawable(R.drawable.ic_close)
+        val drawable = AppCompatResources.getDrawable(view.context, R.drawable.ic_close)
         drawable?.setTint(ContextCompat.getColor(view.context, R.color.photonWhite))
         view.bottom_bar_icon_button.setImageDrawable(drawable)
         view.bottom_bar_icon_button.contentDescription =
@@ -197,7 +198,7 @@ class CollectionCreationView(
         view.bottom_bar_text.text =
             view.context.getString(R.string.create_collection_add_new_collection)
 
-        val drawable = view.context.getDrawable(R.drawable.ic_new)
+        val drawable = AppCompatResources.getDrawable(view.context, R.drawable.ic_new)
         drawable?.setTint(ContextCompat.getColor(view.context, R.color.photonWhite))
         view.bottom_bar_icon_button.setImageDrawable(drawable)
         view.bottom_bar_icon_button.contentDescription = null
@@ -252,7 +253,7 @@ class CollectionCreationView(
         name_collection_edittext.setText(
             view.context.getString(
                 R.string.create_collection_default_name,
-                state.tabCollections.size + 1
+                state.defaultCollectionNumber
             )
         )
         name_collection_edittext.setSelection(0, name_collection_edittext.text.length)

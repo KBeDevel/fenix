@@ -7,18 +7,23 @@ package org.mozilla.fenix.search
 
 import android.content.Context
 import androidx.navigation.NavController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import mozilla.components.browser.search.SearchEngine
 import mozilla.components.browser.session.Session
 import mozilla.components.support.ktx.kotlin.isUrl
 import org.mozilla.fenix.BrowserDirection
 import org.mozilla.fenix.HomeActivity
-import org.mozilla.fenix.R
 import org.mozilla.fenix.components.metrics.Event
-import org.mozilla.fenix.ext.metrics
-import org.mozilla.fenix.ext.nav
-import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.components.metrics.Event.PerformedSearch.SearchAccessPoint.ACTION
+import org.mozilla.fenix.components.metrics.Event.PerformedSearch.SearchAccessPoint.NONE
+import org.mozilla.fenix.components.metrics.Event.PerformedSearch.SearchAccessPoint.SUGGESTION
+import org.mozilla.fenix.components.metrics.MetricsUtils
+import org.mozilla.fenix.components.searchengine.CustomSearchEngineStore
 import org.mozilla.fenix.ext.components
-import org.mozilla.fenix.ext.searchEngineManager
+import org.mozilla.fenix.ext.metrics
+import org.mozilla.fenix.ext.settings
 
 /**
  * An interface that handles the view manipulation of the Search, triggered by the Interactor
@@ -32,13 +37,16 @@ interface SearchController {
     fun handleSearchShortcutEngineSelected(searchEngine: SearchEngine)
     fun handleClickSearchEngineSettings()
     fun handleExistingSessionSelected(session: Session)
+    fun handleExistingSessionSelected(tabId: String)
     fun handleSearchShortcutsButtonClicked()
 }
 
 class DefaultSearchController(
     private val context: Context,
     private val store: SearchFragmentStore,
-    private val navController: NavController
+    private val navController: NavController,
+    private val lifecycleScope: CoroutineScope,
+    private val clearToolbarFocus: () -> Unit
 ) : SearchController {
 
     override fun handleUrlCommitted(url: String) {
@@ -53,28 +61,54 @@ class DefaultSearchController(
             val event = if (url.isUrl()) {
                 Event.EnteredUrl(false)
             } else {
-                createSearchEvent(store.state.searchEngineSource.searchEngine, false)
+                val searchAccessPoint = when (store.state.searchAccessPoint) {
+                    NONE -> ACTION
+                    else -> store.state.searchAccessPoint
+                }
+
+                searchAccessPoint?.let { sap ->
+                    MetricsUtils.createSearchEvent(
+                        store.state.searchEngineSource.searchEngine,
+                        context,
+                        sap
+                    )
+                }
             }
 
-            context.metrics.track(event)
+            event?.let { context.metrics.track(it) }
         }
     }
 
     override fun handleEditingCancelled() {
-        navController.navigateUp()
+        lifecycleScope.launch {
+            clearToolbarFocus()
+            // Delay a short amount so the keyboard begins animating away. This makes exit animation
+            // much smoother instead of having two separate parts (keyboard hides THEN animation)
+            delay(KEYBOARD_ANIMATION_DELAY)
+            navController.popBackStack()
+        }
     }
 
     override fun handleTextChanged(text: String) {
+        // Display the search shortcuts on each entry of the search fragment (see #5308)
+        val textMatchesCurrentUrl = store.state.session?.url ?: "" == text
+        val textMatchesCurrentSearch = store.state.session?.searchTerms ?: "" == text
+
         store.dispatch(SearchFragmentAction.UpdateQuery(text))
-        store.dispatch(SearchFragmentAction.ShowSearchShortcutEnginePicker(
-            text.isEmpty() && context.settings().shouldShowSearchShortcuts
-        ))
-        store.dispatch(SearchFragmentAction.ShowSearchSuggestionsHint(
-            text.isNotEmpty() &&
-                    (context as HomeActivity).browsingModeManager.mode.isPrivate &&
-                    !context.settings().shouldShowSearchSuggestionsInPrivate &&
-                    !context.settings().showSearchSuggestionsInPrivateOnboardingFinished
-        ))
+        store.dispatch(
+            SearchFragmentAction.ShowSearchShortcutEnginePicker(
+                (textMatchesCurrentUrl || textMatchesCurrentSearch || text.isEmpty()) &&
+                    context.settings().shouldShowSearchShortcuts
+            )
+        )
+        store.dispatch(
+            SearchFragmentAction.AllowSearchSuggestionsInPrivateModePrompt(
+                text.isNotEmpty() &&
+                (context as HomeActivity).browsingModeManager.mode.isPrivate &&
+                !context.settings().shouldShowSearchSuggestionsInPrivate &&
+                !context.settings().showSearchSuggestionsInPrivateOnboardingFinished
+            )
+        )
     }
 
     override fun handleUrlTapped(url: String) {
@@ -96,13 +130,26 @@ class DefaultSearchController(
             forceSearch = true
         )
 
-        val event = createSearchEvent(store.state.searchEngineSource.searchEngine, true)
-        context.metrics.track(event)
+        val searchAccessPoint = when (store.state.searchAccessPoint) {
+            NONE -> SUGGESTION
+            else -> store.state.searchAccessPoint
+        }
+
+        val event = searchAccessPoint?.let { sap ->
+            MetricsUtils.createSearchEvent(
+                store.state.searchEngineSource.searchEngine,
+                context,
+                sap
+            )
+        }
+        event?.let { context.metrics.track(it) }
     }
 
     override fun handleSearchShortcutEngineSelected(searchEngine: SearchEngine) {
         store.dispatch(SearchFragmentAction.SearchShortcutEngineSelected(searchEngine))
-        context.metrics.track(Event.SearchShortcutSelected(searchEngine.name))
+        val isCustom =
+            CustomSearchEngineStore.isCustomSearchEngine(context, searchEngine.identifier)
+        context.metrics.track(Event.SearchShortcutSelected(searchEngine, isCustom))
     }
 
     override fun handleSearchShortcutsButtonClicked() {
@@ -116,25 +163,20 @@ class DefaultSearchController(
     }
 
     override fun handleExistingSessionSelected(session: Session) {
-        val directions = SearchFragmentDirections.actionSearchFragmentToBrowserFragment(null)
-        navController.nav(R.id.searchFragment, directions)
         context.components.core.sessionManager.select(session)
+        (context as HomeActivity).openToBrowser(
+            from = BrowserDirection.FromSearch
+        )
     }
 
-    private fun createSearchEvent(
-        engine: SearchEngine,
-        isSuggestion: Boolean
-    ): Event.PerformedSearch {
-        val isShortcut = engine != context.searchEngineManager.defaultSearchEngine
+    override fun handleExistingSessionSelected(tabId: String) {
+        val session = context.components.core.sessionManager.findSessionById(tabId)
+        if (session != null) {
+            handleExistingSessionSelected(session)
+        }
+    }
 
-        val engineSource =
-            if (isShortcut) Event.PerformedSearch.EngineSource.Shortcut(engine)
-            else Event.PerformedSearch.EngineSource.Default(engine)
-
-        val source =
-            if (isSuggestion) Event.PerformedSearch.EventSource.Suggestion(engineSource)
-            else Event.PerformedSearch.EventSource.Action(engineSource)
-
-        return Event.PerformedSearch(source)
+    companion object {
+        internal const val KEYBOARD_ANIMATION_DELAY = 5L
     }
 }

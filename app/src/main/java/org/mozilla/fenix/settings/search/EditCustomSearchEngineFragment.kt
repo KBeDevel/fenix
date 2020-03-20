@@ -6,12 +6,11 @@ package org.mozilla.fenix.settings.search
 
 import android.net.Uri
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
-import androidx.appcompat.app.AppCompatActivity
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
@@ -26,13 +25,16 @@ import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.searchengine.CustomSearchEngineStore
 import org.mozilla.fenix.ext.increaseTapArea
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.showToolbar
 import org.mozilla.fenix.settings.SupportUtils
 import java.util.Locale
 
+/**
+ * Fragment to enter a custom search engine name and URL template.
+ */
 class EditCustomSearchEngineFragment : Fragment(R.layout.fragment_add_search_engine) {
-    private val engineIdentifier: String by lazy {
-        navArgs<EditCustomSearchEngineFragmentArgs>().value.searchEngineIdentifier
-    }
+
+    private val args by navArgs<EditCustomSearchEngineFragmentArgs>()
 
     private lateinit var searchEngine: SearchEngine
 
@@ -40,7 +42,7 @@ class EditCustomSearchEngineFragment : Fragment(R.layout.fragment_add_search_eng
         super.onCreate(savedInstanceState)
         setHasOptionsMenu(true)
         searchEngine = CustomSearchEngineStore.loadCustomSearchEngines(requireContext()).first {
-            it.identifier == engineIdentifier
+            it.identifier == args.searchEngineIdentifier
         }
     }
 
@@ -68,8 +70,7 @@ class EditCustomSearchEngineFragment : Fragment(R.layout.fragment_add_search_eng
 
     override fun onResume() {
         super.onResume()
-        (activity as AppCompatActivity).title = getString(R.string.search_engine_edit_custom_search_engine_title)
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(getString(R.string.search_engine_edit_custom_search_engine_title))
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
@@ -106,7 +107,7 @@ class EditCustomSearchEngineFragment : Fragment(R.layout.fragment_add_search_eng
             .allSearchEngineIdentifiers()
             .map { it.toLowerCase(Locale.ROOT) }
 
-        val nameHasChanged = name != engineIdentifier
+        val nameHasChanged = name != args.searchEngineIdentifier
 
         if (existingIdentifiers.contains(name.toLowerCase(Locale.ROOT)) && nameHasChanged) {
             custom_search_engine_name_field.error = resources
@@ -139,12 +140,12 @@ class EditCustomSearchEngineFragment : Fragment(R.layout.fragment_add_search_eng
             when (result) {
                 SearchStringValidator.Result.CannotReach -> {
                     custom_search_engine_search_string_field.error = resources
-                        .getString(R.string.search_add_custom_engine_error_cannot_reach)
+                        .getString(R.string.search_add_custom_engine_error_cannot_reach, name)
                 }
                 SearchStringValidator.Result.Success -> {
                     CustomSearchEngineStore.updateSearchEngine(
                         context = requireContext(),
-                        oldEngineName = engineIdentifier,
+                        oldEngineName = args.searchEngineIdentifier,
                         newEngineName = name,
                         searchQuery = searchString
                     )

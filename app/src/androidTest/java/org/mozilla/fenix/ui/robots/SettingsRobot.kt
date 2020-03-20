@@ -6,19 +6,32 @@
 
 package org.mozilla.fenix.ui.robots
 
+import android.content.pm.PackageManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions
+import androidx.test.espresso.contrib.RecyclerViewActions
+import androidx.test.espresso.ViewInteraction
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.intent.Intents.intended
+import androidx.test.espresso.intent.matcher.IntentMatchers.toPackage
 import androidx.test.espresso.matcher.ViewMatchers
-import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
 import androidx.test.espresso.matcher.ViewMatchers.Visibility
+import androidx.test.espresso.matcher.ViewMatchers.hasDescendant
+import androidx.test.espresso.matcher.ViewMatchers.isCompletelyDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
+import androidx.test.espresso.matcher.ViewMatchers.withId
+import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.By.textContains
+import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import org.hamcrest.CoreMatchers
+import org.mozilla.fenix.R
+import org.mozilla.fenix.helpers.Constants.PackageName.GOOGLE_PLAY_SERVICES
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
-import org.mozilla.fenix.helpers.TestHelper
+import org.mozilla.fenix.helpers.TestHelper.scrollToElementByText
 import org.mozilla.fenix.helpers.click
 
 /**
@@ -27,10 +40,10 @@ import org.mozilla.fenix.helpers.click
 class SettingsRobot {
 
     // BASICS SECTION
-    fun verifyBasicsHeading() = assertBasicsHeading()
+    fun verifyBasicsHeading() = assertGeneralHeading()
 
     fun verifySearchEngineButton() = assertSearchEngineButton()
-    fun verifyThemeButton() = assertThemeButton()
+    fun verifyThemeButton() = assertCustomizeButton()
     fun verifyThemeSelected() = assertThemeSelected()
     fun verifyAccessibilityButton() = assertAccessibilityButton()
     fun verifySetAsDefaultBrowserButton() = assertSetAsDefaultBrowserButton()
@@ -40,13 +53,14 @@ class SettingsRobot {
 
     fun verifyEnhancedTrackingProtectionButton() = assertEnhancedTrackingProtectionButton()
     fun verifyLoginsButton() = assertLoginsButton()
-    fun verifyEnhancedTrackingProtectionValue() = assertEnhancedTrackingProtectionValue()
-    fun verifyAddPrivateBrowsingShortcutButton() = assertAddPrivateBrowsingShortcutButton()
+    fun verifyEnhancedTrackingProtectionValue(state: String) =
+        assertEnhancedTrackingProtectionValue(state)
+
+    fun verifyPrivateBrowsingButton() = assertPrivateBrowsingButton()
     fun verifySitePermissionsButton() = assertSitePermissionsButton()
     fun verifyDeleteBrowsingDataButton() = assertDeleteBrowsingDataButton()
     fun verifyDeleteBrowsingDataOnQuitButton() = assertDeleteBrowsingDataOnQuitButton()
     fun verifyDataCollectionButton() = assertDataCollectionButton()
-    fun verifyPrivacyNoticeButton() = assertPrivacyNoticeButton()
     fun verifyLeakCanaryButton() = assertLeakCanaryButton()
     fun verifySettingsView() = assertSettingsView()
 
@@ -58,43 +72,52 @@ class SettingsRobot {
     // ABOUT SECTION
     fun verifyAboutHeading() = assertAboutHeading()
 
-    fun verifyHelp() = assertHelp()
     fun verifyRateOnGooglePlay() = assertRateOnGooglePlay()
     fun verifyAboutFirefoxPreview() = assertAboutFirefoxPreview()
+    fun verifyGooglePlayRedirect() = assertGooglePlayRedirect()
 
     class Transition {
 
         val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
         fun goBack(interact: HomeScreenRobot.() -> Unit): HomeScreenRobot.Transition {
-            mDevice.waitForIdle()
-            goBackButton().perform(ViewActions.click())
+            goBackButton().click()
 
             HomeScreenRobot().interact()
             return HomeScreenRobot.Transition()
         }
 
-        fun openSearchSubMenu(interact: SettingsSubMenuSearchRobot.() -> Unit): SettingsSubMenuSearchRobot.Transition {
-            mDevice.waitForIdle()
-            fun searchEngineButton() = onView(ViewMatchers.withText("Search"))
+        fun openAboutFirefoxPreview(interact: SettingsSubMenuAboutRobot.() -> Unit):
+                SettingsSubMenuAboutRobot.Transition {
+
+            assertAboutFirefoxPreview().click()
+
+            SettingsSubMenuAboutRobot().interact()
+            return SettingsSubMenuAboutRobot.Transition()
+        }
+
+        fun openSearchSubMenu(interact: SettingsSubMenuSearchRobot.() -> Unit):
+                SettingsSubMenuSearchRobot.Transition {
+
+            fun searchEngineButton() = onView(withText("Search"))
             searchEngineButton().click()
 
             SettingsSubMenuSearchRobot().interact()
             return SettingsSubMenuSearchRobot.Transition()
         }
 
-        fun openThemeSubMenu(interact: SettingsSubMenuThemeRobot.() -> Unit): SettingsSubMenuThemeRobot.Transition {
-            mDevice.waitForIdle()
-            fun themeButton() = onView(ViewMatchers.withText("Theme"))
-            themeButton().click()
+        fun openCustomizeSubMenu(interact: SettingsSubMenuThemeRobot.() -> Unit): SettingsSubMenuThemeRobot.Transition {
+
+            fun customizeButton() = onView(withText("Customize"))
+            customizeButton().click()
 
             SettingsSubMenuThemeRobot().interact()
             return SettingsSubMenuThemeRobot.Transition()
         }
 
         fun openAccessibilitySubMenu(interact: SettingsSubMenuAccessibilityRobot.() -> Unit): SettingsSubMenuAccessibilityRobot.Transition {
-            mDevice.waitForIdle()
-            fun accessibilityButton() = onView(ViewMatchers.withText("Accessibility"))
+
+            fun accessibilityButton() = onView(withText("Accessibility"))
             accessibilityButton().click()
 
             SettingsSubMenuAccessibilityRobot().interact()
@@ -102,133 +125,192 @@ class SettingsRobot {
         }
 
         fun openDefaultBrowserSubMenu(interact: SettingsSubMenuDefaultBrowserRobot.() -> Unit): SettingsSubMenuDefaultBrowserRobot.Transition {
-            mDevice.waitForIdle()
-            fun defaultBrowserButton() = onView(ViewMatchers.withText("Set as default browser"))
+
+            fun defaultBrowserButton() = onView(withText("Set as default browser"))
             defaultBrowserButton().click()
 
             SettingsSubMenuDefaultBrowserRobot().interact()
             return SettingsSubMenuDefaultBrowserRobot.Transition()
+        }
+
+        fun openEnhancedTrackingProtectionSubMenu(interact: SettingsSubMenuEnhancedTrackingProtectionRobot.() -> Unit): SettingsSubMenuEnhancedTrackingProtectionRobot.Transition {
+            fun enhancedTrackingProtectionButton() =
+                onView(withText("Enhanced Tracking Protection"))
+            enhancedTrackingProtectionButton().click()
+
+            SettingsSubMenuEnhancedTrackingProtectionRobot().interact()
+            return SettingsSubMenuEnhancedTrackingProtectionRobot.Transition()
+        }
+
+        fun openLoginsAndPasswordSubMenu(interact: SettingsSubMenuLoginsAndPasswordRobot.() -> Unit): SettingsSubMenuLoginsAndPasswordRobot.Transition {
+            scrollToElementByText("Logins and passwords")
+            fun loginsAndPasswordsButton() = onView(withText("Logins and passwords"))
+            loginsAndPasswordsButton().click()
+
+            SettingsSubMenuLoginsAndPasswordRobot().interact()
+            return SettingsSubMenuLoginsAndPasswordRobot.Transition()
+        }
+
+        fun openTurnOnSyncMenu(interact: SettingsTurnOnSyncRobot.() -> Unit): SettingsTurnOnSyncRobot.Transition {
+            fun turnOnSyncButton() = onView(withText("Turn on Sync"))
+            turnOnSyncButton().click()
+
+            SettingsTurnOnSyncRobot().interact()
+            return SettingsTurnOnSyncRobot.Transition()
+        }
+
+        fun openPrivateBrowsingSubMenu(interact: SettingsSubMenuPrivateBrowsingRobot.() -> Unit): SettingsSubMenuPrivateBrowsingRobot.Transition {
+            scrollToElementByText("Private browsing")
+            fun privateBrowsingButton() = mDevice.findObject(textContains("Private browsing"))
+            privateBrowsingButton().click()
+
+            SettingsSubMenuPrivateBrowsingRobot().interact()
+            return SettingsSubMenuPrivateBrowsingRobot.Transition()
         }
     }
 }
 
 private fun assertSettingsView() {
     // verify that we are in the correct library view
-    assertBasicsHeading()
+    assertGeneralHeading()
     assertPrivacyHeading()
     assertDeveloperToolsHeading()
     assertAboutHeading()
 }
 
-// BASICS SECTION
-private fun assertBasicsHeading() = onView(ViewMatchers.withText("Basics"))
+// GENERAL SECTION
+private fun assertGeneralHeading() = onView(withText("General"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertSearchEngineButton() {
     mDevice.wait(Until.findObject(By.text("Search")), waitingTime)
-    onView(ViewMatchers.withText("Search"))
+    onView(withText("Search"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
-private fun assertThemeButton() = onView(ViewMatchers.withText("Theme"))
+private fun assertCustomizeButton() = onView(withText("Customize"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun assertThemeSelected() = onView(ViewMatchers.withText("Light"))
+private fun assertThemeSelected() = onView(withText("Light"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun assertAccessibilityButton() = onView(ViewMatchers.withText("Accessibility"))
+private fun assertAccessibilityButton() = onView(withText("Accessibility"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertSetAsDefaultBrowserButton() =
-    onView(ViewMatchers.withText("Set as default browser"))
+    onView(withText("Set as default browser"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 // PRIVACY SECTION
 private fun assertPrivacyHeading() {
-    onView(ViewMatchers.withText("Privacy"))
+    onView(withText("Privacy and security"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
-private fun assertEnhancedTrackingProtectionButton() =
-    onView(ViewMatchers.withText("Enhanced Tracking Protection"))
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+private fun assertEnhancedTrackingProtectionButton() {
+    mDevice.wait(Until.findObject(By.text("Privacy and Security")), waitingTime)
+    onView(withId(R.id.recycler_view)).perform(
+        RecyclerViewActions.scrollTo<RecyclerView.ViewHolder>(
+            hasDescendant(withText("Enhanced Tracking Protection"))
+        )
+    ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+}
 
-private fun assertEnhancedTrackingProtectionValue() = onView(ViewMatchers.withText("On"))
-    .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+private fun assertEnhancedTrackingProtectionValue(state: String) {
+    mDevice.wait(Until.findObject(By.text("Enhanced Tracking Protection")), waitingTime)
+    onView(withText(state)).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+}
 
 private fun assertLoginsButton() {
-    TestHelper.scrollToElementByText("Passwords")
-    onView(ViewMatchers.withText("Passwords"))
+    scrollToElementByText("Logins and passwords")
+    onView(withText("Logins and passwords"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
-private fun assertAddPrivateBrowsingShortcutButton() {
-    TestHelper.scrollToElementByText("Add private browsing shortcut")
-    mDevice.wait(Until.findObject(By.text("Add private browsing shortcut")), waitingTime)
-    onView(ViewMatchers.withText("Add private browsing shortcut"))
+private fun assertPrivateBrowsingButton() {
+    scrollToElementByText("Private browsing")
+    mDevice.wait(Until.findObject(By.text("Private browsing")), waitingTime)
+    onView(withText("Private browsing"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
 private fun assertSitePermissionsButton() {
-    TestHelper.scrollToElementByText("Site permissions")
-    onView(ViewMatchers.withText("Site permissions"))
+    scrollToElementByText("Site permissions")
+    onView(withText("Site permissions"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
 private fun assertDeleteBrowsingDataButton() {
-    TestHelper.scrollToElementByText("Delete browsing data")
-    onView(ViewMatchers.withText("Delete browsing data"))
+    scrollToElementByText("Delete browsing data")
+    onView(withText("Delete browsing data"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
 private fun assertDeleteBrowsingDataOnQuitButton() {
-    TestHelper.scrollToElementByText("Delete browsing data on quit")
-    onView(ViewMatchers.withText("Delete browsing data on quit"))
+    scrollToElementByText("Delete browsing data on quit")
+    onView(withText("Delete browsing data on quit"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
-private fun assertDataCollectionButton() = onView(ViewMatchers.withText("Data collection"))
+private fun assertDataCollectionButton() = onView(withText("Data collection"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun assertPrivacyNoticeButton() = onView(ViewMatchers.withText("Privacy notice"))
-    .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
-
-private fun assertLeakCanaryButton() = onView(ViewMatchers.withText("LeakCanary"))
+private fun assertLeakCanaryButton() = onView(withText("LeakCanary"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 // DEVELOPER TOOLS SECTION
 private fun assertDeveloperToolsHeading() {
-    TestHelper.scrollToElementByText("Developer tools")
-    onView(ViewMatchers.withText("Developer tools"))
+    scrollToElementByText("Developer tools")
+    onView(withText("Developer tools"))
         .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
-private fun assertRemoteDebug() = onView(ViewMatchers.withText("Remote debugging via USB"))
-    .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+private fun assertRemoteDebug() {
+    scrollToElementByText("Remote debugging via USB")
+    onView(withText("Remote debugging via USB"))
+        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+}
 
 // ABOUT SECTION
-private fun assertAboutHeading() {
-    TestHelper.scrollToElementByText("About")
-    onView(ViewMatchers.withText("About"))
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+private fun assertAboutHeading(): ViewInteraction {
+    scrollToElementByText("About")
+    return onView(withText("About"))
+        .check(matches(isCompletelyDisplayed()))
 }
 
-private fun assertHelp() {
-    TestHelper.scrollToElementByText("About Firefox Preview")
-    onView(ViewMatchers.withText("Help"))
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+private fun assertRateOnGooglePlay(): ViewInteraction {
+    scrollToElementByText("About Firefox Preview")
+    return onView(withText("Rate on Google Play"))
+        .check(matches(isCompletelyDisplayed()))
 }
 
-private fun assertRateOnGooglePlay() {
-    TestHelper.scrollToElementByText("About Firefox Preview")
-    onView(ViewMatchers.withText("Rate on Google Play"))
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+private fun assertAboutFirefoxPreview(): ViewInteraction {
+    scrollToElementByText("About Firefox Preview")
+    return onView(withText("About Firefox Preview"))
+        .check(matches(isCompletelyDisplayed()))
 }
 
-private fun assertAboutFirefoxPreview() {
-    TestHelper.scrollToElementByText("About Firefox Preview")
-    onView(ViewMatchers.withText("About Firefox Preview"))
-        .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+fun swipeToBottom() = onView(ViewMatchers.withId(R.id.recycler_view)).perform(ViewActions.swipeUp())
+
+fun clickRateButtonGooglePlay() {
+    assertRateOnGooglePlay().click()
+}
+
+private fun assertGooglePlayRedirect() {
+    if (isPackageInstalled(GOOGLE_PLAY_SERVICES)) {
+        intended(toPackage(GOOGLE_PLAY_SERVICES))
+    } else {
+        BrowserRobot().verifyRateOnGooglePlayURL()
+    }
+}
+
+fun isPackageInstalled(packageName: String): Boolean {
+    return try {
+        val packageManager = InstrumentationRegistry.getInstrumentation().context.packageManager
+        packageManager.getApplicationInfo(packageName, 0).enabled
+    } catch (exception: PackageManager.NameNotFoundException) {
+        false
+    }
 }
 
 private fun goBackButton() =

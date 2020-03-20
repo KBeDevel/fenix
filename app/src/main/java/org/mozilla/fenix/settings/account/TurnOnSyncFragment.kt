@@ -8,11 +8,11 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.text.HtmlCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
 import kotlinx.android.synthetic.main.fragment_turn_on_sync.view.*
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
@@ -21,9 +21,11 @@ import org.mozilla.fenix.R
 import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.metrics.Event
 import org.mozilla.fenix.ext.requireComponents
+import org.mozilla.fenix.ext.showToolbar
 
-@SuppressWarnings("TooManyFunctions")
 class TurnOnSyncFragment : Fragment(), AccountObserver {
+
+    private val args by navArgs<TurnOnSyncFragmentArgs>()
 
     private val signInClickListener = View.OnClickListener {
         requireComponents.services.accountsAuthFeature.beginAuthentication(requireContext())
@@ -58,8 +60,7 @@ class TurnOnSyncFragment : Fragment(), AccountObserver {
         }
 
         requireComponents.backgroundServices.accountManager.register(this, owner = this)
-        (activity as AppCompatActivity).title = getString(R.string.preferences_sync)
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(getString(R.string.preferences_sync))
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -74,8 +75,19 @@ class TurnOnSyncFragment : Fragment(), AccountObserver {
     }
 
     override fun onAuthenticated(account: OAuthAccount, authType: AuthType) {
-        FenixSnackbar.make(view!!, FenixSnackbar.LENGTH_SHORT)
-            .setText(requireContext().getString(R.string.sync_syncing_in_progress))
-            .show()
+        val snackbarText = requireContext().getString(R.string.sync_syncing_in_progress)
+        val snackbarLength = FenixSnackbar.LENGTH_SHORT
+
+        // Since the snackbar can be presented in BrowserFragment or in SettingsFragment we must
+        // base our display method on the padSnackbar argument
+        if (args.padSnackbar) {
+            FenixSnackbar.makeWithToolbarPadding(requireView(), snackbarLength)
+                .setText(snackbarText)
+                .show()
+        } else {
+            FenixSnackbar.make(requireView(), snackbarLength)
+                .setText(snackbarText)
+                .show()
+        }
     }
 }

@@ -5,9 +5,23 @@
 package org.mozilla.fenix.components
 
 import android.content.Context
+import android.content.Intent
+import androidx.core.net.toUri
+import mozilla.components.feature.addons.AddonManager
+import mozilla.components.feature.addons.amo.AddonCollectionProvider
+import mozilla.components.feature.addons.update.AddonUpdater
+import mozilla.components.feature.addons.update.DefaultAddonUpdater
+import mozilla.components.feature.addons.migration.SupportedAddonsChecker
+import mozilla.components.feature.addons.migration.DefaultSupportedAddonsChecker
+import mozilla.components.feature.tabs.TabsUseCases
 import mozilla.components.lib.publicsuffixlist.PublicSuffixList
+import mozilla.components.support.migration.state.MigrationStore
+import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.test.Mockable
 import org.mozilla.fenix.utils.ClipboardHandler
+import java.util.concurrent.TimeUnit
+
+private const val DAY_IN_MINUTES = 24 * 60L
 
 /**
  * Provides access to all components.
@@ -17,11 +31,11 @@ class Components(private val context: Context) {
     val backgroundServices by lazy {
         BackgroundServices(
             context,
+            push,
             analytics.crashReporter,
-            core.historyStorage,
-            core.bookmarksStorage,
-            core.passwordsStorage,
-            core.getSecureAbove22Preferences()
+            core.lazyHistoryStorage,
+            core.lazyBookmarksStorage,
+            core.lazyPasswordsStorage
         )
     }
     val services by lazy { Services(context, backgroundServices.accountManager) }
@@ -44,10 +58,42 @@ class Components(private val context: Context) {
             useCases.sessionUseCases,
             useCases.searchUseCases,
             core.client,
-            core.customTabsStore
+            core.customTabsStore,
+            migrationStore,
+            core.webAppManifestStorage
         )
     }
+
+    val addonCollectionProvider by lazy {
+        AddonCollectionProvider(context, core.client, maxCacheAgeInMinutes = DAY_IN_MINUTES)
+    }
+
+    @Suppress("MagicNumber")
+    val addonUpdater by lazy {
+        DefaultAddonUpdater(context, AddonUpdater.Frequency(12, TimeUnit.HOURS))
+    }
+
+    @Suppress("MagicNumber")
+    val supportedAddChecker by lazy {
+        DefaultSupportedAddonsChecker(context, SupportedAddonsChecker.Frequency(16, TimeUnit.MINUTES),
+            onNotificationClickIntent = Intent(context, HomeActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                data = "fenix://settings_addon_manager".toUri()
+            }
+        )
+    }
+
+    val addonManager by lazy {
+        AddonManager(core.store, core.engine, addonCollectionProvider, addonUpdater)
+    }
+
+    val tabsUseCases: TabsUseCases by lazy { TabsUseCases(core.sessionManager) }
+
     val analytics by lazy { Analytics(context) }
     val publicSuffixList by lazy { PublicSuffixList(context) }
     val clipboardHandler by lazy { ClipboardHandler(context) }
+    val migrationStore by lazy { MigrationStore() }
+    val performance by lazy { PerformanceComponent() }
+    val push by lazy { Push(context, analytics.crashReporter) }
 }

@@ -15,9 +15,9 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.RadioButton
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.navArgs
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import mozilla.components.feature.sitepermissions.SitePermissions
@@ -26,12 +26,14 @@ import mozilla.components.feature.sitepermissions.SitePermissions.Status.BLOCKED
 import org.mozilla.fenix.R
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.settings
+import org.mozilla.fenix.ext.showToolbar
 import org.mozilla.fenix.settings.PhoneFeature
 import org.mozilla.fenix.settings.initBlockedByAndroidView
 import org.mozilla.fenix.settings.setStartCheckedIndicator
 
 @SuppressWarnings("TooManyFunctions")
 class SitePermissionsManageExceptionsPhoneFeatureFragment : Fragment() {
+
     private lateinit var phoneFeature: PhoneFeature
     private lateinit var sitePermissions: SitePermissions
     private lateinit var radioAllow: RadioButton
@@ -42,16 +44,12 @@ class SitePermissionsManageExceptionsPhoneFeatureFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        phoneFeature = SitePermissionsManageExceptionsPhoneFeatureFragmentArgs
-            .fromBundle(requireArguments())
-            .phoneFeatureId.toPhoneFeature()
+        val args by navArgs<SitePermissionsManageExceptionsPhoneFeatureFragmentArgs>()
 
-        sitePermissions = SitePermissionsManageExceptionsPhoneFeatureFragmentArgs
-            .fromBundle(requireArguments())
-            .sitePermissions
+        phoneFeature = args.phoneFeatureId.toPhoneFeature()
+        sitePermissions = args.sitePermissions
 
-        (activity as AppCompatActivity).title = phoneFeature.getLabel(requireContext())
-        (activity as AppCompatActivity).supportActionBar?.show()
+        showToolbar(phoneFeature.getLabel(requireContext()))
     }
 
     override fun onCreateView(
@@ -162,7 +160,8 @@ class SitePermissionsManageExceptionsPhoneFeatureFragment : Fragment() {
             PhoneFeature.LOCATION -> sitePermissions.copy(location = status)
             PhoneFeature.MICROPHONE -> sitePermissions.copy(microphone = status)
             PhoneFeature.NOTIFICATION -> sitePermissions.copy(notification = status)
-            PhoneFeature.AUTOPLAY -> sitePermissions.copy() // not supported by GV or A-C yet
+            PhoneFeature.AUTOPLAY_AUDIBLE -> sitePermissions.copy(autoplayAudible = status)
+            PhoneFeature.AUTOPLAY_INAUDIBLE -> sitePermissions.copy(autoplayInaudible = status)
         }
         lifecycleScope.launch(IO) {
             requireComponents.core.permissionStorage.updateSitePermissions(updatedSitePermissions)

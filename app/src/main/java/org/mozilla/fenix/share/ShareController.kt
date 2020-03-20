@@ -7,23 +7,26 @@ package org.mozilla.fenix.share
 import android.content.Context
 import android.content.Intent
 import android.content.Intent.ACTION_SEND
+import android.content.Intent.EXTRA_SUBJECT
 import android.content.Intent.EXTRA_TEXT
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import android.net.Uri
 import androidx.annotation.VisibleForTesting
 import androidx.navigation.NavController
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.concept.sync.Device
 import mozilla.components.concept.sync.TabData
-import mozilla.components.feature.sendtab.SendTabUseCases
+import mozilla.components.feature.accounts.push.SendTabUseCases
+import mozilla.components.feature.share.RecentAppsStorage
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.FenixSnackbar
-import org.mozilla.fenix.components.FenixSnackbarPresenter
 import org.mozilla.fenix.components.metrics.Event
-import org.mozilla.fenix.ext.getRootView
 import org.mozilla.fenix.ext.metrics
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.share.listadapters.AppShareOption
@@ -41,55 +44,66 @@ interface ShareController {
     fun handleShareToDevice(device: Device)
     fun handleShareToAllDevices(devices: List<Device>)
     fun handleSignIn()
+
+    enum class Result {
+        DISMISSED, SHARE_ERROR, SUCCESS
+    }
 }
 
 /**
  * Default behavior of [ShareController]. Other implementations are possible.
  *
  * @param context [Context] used for various Android interactions.
- * @param sharedTabs the list of [ShareTab]s that can be shared.
+ * @param shareData the list of [ShareData]s that can be shared.
  * @param sendTabUseCases instance of [SendTabUseCases] which allows sending tabs to account devices.
- * @param snackbarPresenter - instance of [FenixSnackbarPresenter] for displaying styled snackbars
+ * @param snackbar - instance of [FenixSnackbar] for displaying styled snackbars
  * @param navController - [NavController] used for navigation.
  * @param dismiss - callback signalling sharing can be closed.
  */
 @Suppress("TooManyFunctions")
 class DefaultShareController(
     private val context: Context,
-    private val sharedTabs: List<ShareTab>,
+    private val shareData: List<ShareData>,
     private val sendTabUseCases: SendTabUseCases,
-    private val snackbarPresenter: FenixSnackbarPresenter,
+    private val snackbar: FenixSnackbar,
     private val navController: NavController,
-    private val dismiss: () -> Unit
+    private val recentAppsStorage: RecentAppsStorage,
+    private val lifecycleScope: CoroutineScope,
+    private val dismiss: (ShareController.Result) -> Unit
 ) : ShareController {
+
     override fun handleReauth() {
         val directions = ShareFragmentDirections.actionShareFragmentToAccountProblemFragment()
         navController.nav(R.id.shareFragment, directions)
-        dismiss()
+        dismiss(ShareController.Result.DISMISSED)
     }
 
     override fun handleShareClosed() {
-        dismiss()
+        dismiss(ShareController.Result.DISMISSED)
     }
 
     override fun handleShareToApp(app: AppShareOption) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            recentAppsStorage.updateRecentApp(app.packageName)
+        }
+
         val intent = Intent(ACTION_SEND).apply {
             putExtra(EXTRA_TEXT, getShareText())
+            putExtra(EXTRA_SUBJECT, shareData.map { it.title }.joinToString(", "))
             type = "text/plain"
             flags = FLAG_ACTIVITY_NEW_TASK
             setClassName(app.packageName, app.activityName)
         }
 
-        try {
+        val result = try {
             context.startActivity(intent)
+            ShareController.Result.SUCCESS
         } catch (e: SecurityException) {
-            context.getRootView()?.let {
-                FenixSnackbar.make(it, Snackbar.LENGTH_LONG)
-                    .setText(context.getString(R.string.share_error_snackbar))
-                    .show()
-            }
+            snackbar.setText(context.getString(R.string.share_error_snackbar))
+            snackbar.show()
+            ShareController.Result.SHARE_ERROR
         }
-        dismiss()
+        dismiss(result)
     }
 
     override fun handleAddNewDevice() {
@@ -99,66 +113,75 @@ class DefaultShareController(
 
     override fun handleShareToDevice(device: Device) {
         context.metrics.track(Event.SendTab)
-        shareToDevicesWithRetry { sendTabUseCases.sendToDeviceAsync(device.id, sharedTabs.toTabData()) }
+        shareToDevicesWithRetry { sendTabUseCases.sendToDeviceAsync(device.id, shareData.toTabData()) }
     }
 
     override fun handleShareToAllDevices(devices: List<Device>) {
-        shareToDevicesWithRetry { sendTabUseCases.sendToAllAsync(sharedTabs.toTabData()) }
+        shareToDevicesWithRetry { sendTabUseCases.sendToAllAsync(shareData.toTabData()) }
     }
 
     override fun handleSignIn() {
         context.metrics.track(Event.SignInToSendTab)
-        val directions = ShareFragmentDirections.actionShareFragmentToTurnOnSyncFragment()
+        val directions =
+            ShareFragmentDirections.actionShareFragmentToTurnOnSyncFragment(padSnackbar = true)
         navController.nav(R.id.shareFragment, directions)
-        dismiss()
+        dismiss(ShareController.Result.DISMISSED)
     }
 
     private fun shareToDevicesWithRetry(shareOperation: () -> Deferred<Boolean>) {
         // Use GlobalScope to allow the continuation of this method even if the share fragment is closed.
         GlobalScope.launch(Dispatchers.Main) {
-            if (shareOperation.invoke().await()) {
+            val result = if (shareOperation.invoke().await()) {
                 showSuccess()
+                ShareController.Result.SUCCESS
             } else {
                 showFailureWithRetryOption { shareToDevicesWithRetry(shareOperation) }
+                ShareController.Result.DISMISSED
             }
-            dismiss()
+            if (navController.currentDestination?.id == R.id.shareFragment) {
+                dismiss(result)
+            }
         }
     }
 
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     fun showSuccess() {
-        snackbarPresenter.present(
-            getSuccessMessage(),
-            Snackbar.LENGTH_SHORT
-        )
+        snackbar.apply {
+            setText(getSuccessMessage())
+            setLength(Snackbar.LENGTH_SHORT)
+            show()
+        }
     }
 
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     fun showFailureWithRetryOption(operation: () -> Unit) {
-        snackbarPresenter.present(
-            text = context.getString(R.string.sync_sent_tab_error_snackbar),
-            length = Snackbar.LENGTH_LONG,
-            action = operation,
-            actionName = context.getString(R.string.sync_sent_tab_error_snackbar_action),
-            isError = true
-        )
+        snackbar.setText(context.getString(R.string.sync_sent_tab_error_snackbar))
+        snackbar.setLength(Snackbar.LENGTH_LONG)
+        snackbar.setAction(context.getString(R.string.sync_sent_tab_error_snackbar_action), operation)
+        snackbar.setAppropriateBackground(true)
+        snackbar.show()
     }
 
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     fun getSuccessMessage(): String = with(context) {
-        when (sharedTabs.size) {
+        when (shareData.size) {
             1 -> getString(R.string.sync_sent_tab_snackbar)
             else -> getString(R.string.sync_sent_tabs_snackbar)
         }
     }
 
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
-    fun getShareText() = sharedTabs.joinToString("\n") { tab -> tab.url }
+    @VisibleForTesting
+    fun getShareText() = shareData.joinToString("\n\n") { data ->
+        listOfNotNull(data.title, data.url).joinToString("\n")
+    }
 
     // Navigation between app fragments uses ShareTab as arguments. SendTabUseCases uses TabData.
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
-    fun ShareTab.toTabData() = TabData(title, url)
+    @VisibleForTesting
+    internal fun List<ShareData>.toTabData() = map { data ->
+        TabData(title = data.title.orEmpty(), url = data.url ?: data.text?.toDataUri().orEmpty())
+    }
 
-    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
-    fun List<ShareTab>.toTabData() = map { it.toTabData() }
+    private fun String.toDataUri(): String {
+        return "data:,${Uri.encode(this)}"
+    }
 }
